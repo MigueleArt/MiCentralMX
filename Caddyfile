@@ -1,0 +1,20 @@
+# Un solo origen: la PWA en / y la API en /api (decisiones técnicas §8).
+# Con un dominio real en DOMINIO, Caddy obtiene el certificado HTTPS automáticamente.
+{$DOMINIO:localhost} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	handle {
+		root * /srv
+		# El service worker, el HTML y el manifest no se guardan en caché HTTP: así llegan las actualizaciones.
+		@sinCache path /sw.js /index.html /manifest.webmanifest /registerSW.js
+		header @sinCache Cache-Control "no-cache"
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		try_files {path} /index.html
+		file_server
+	}
+}

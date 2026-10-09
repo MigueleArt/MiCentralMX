@@ -1,0 +1,16 @@
+{
+  "name": "micentralmx",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspace backend && npm test --workspace frontend"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2"
+  }
+}

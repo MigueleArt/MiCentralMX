@@ -1,0 +1,66 @@
+/* Inter variable: solo latin y latin-ext (decisiones técnicas §7). */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --color-primario: #176b5b;
+  --color-primario-osc: #0f4f44;
+  --color-primario-suave: #e6f0ed;
+  --color-primario-tenue: #eef5f2;
+  --color-primario-sel: #f2f8f6;
+  --color-acento: #d97706;
+  --color-acento-osc: #c26a05;
+  --color-acento-texto: #b45f05;
+  --color-error: #c94c4c;
+  --color-error-osc: #b03e3e;
+  --color-error-texto: #a33a3a;
+
+  --texto: #1f2933;
+  --texto-2: #5f6b73;
+  --texto-3: #6f7a81;
+  --texto-neutro: #4b565d;
+  --fondo: #f7f8f6;
+  --fondo-tabla: #fafbfa;
+  --superficie: #fff;
+  --gris-1: #eef1ef;
+  --gris-2: #f2f4f3;
+  --gris-3: #e4e9e6;
+  --borde: #d9e0dd;
+  --borde-fuerte: #c5cec9;
+
+  --ok-fondo: #e3f1ea;
+  --ok-texto: #1f5e43;
+  --aviso-fondo: #fbefd9;
+  --aviso-texto: #734a0c;
+  --error-fondo: #fae6e6;
+  --error-texto: #9e3434;
+  --info-fondo: #e3eef6;
+  --info-texto: #255a80;
+  --acento-fondo: #fdebd3;
+  --acento-texto: #7a4306;
+
+  --radio-xs: 6px;
+  --radio-s: 8px;
+  --radio-m: 12px;
+  --radio-l: 16px;
+
+  --nav-alto: 72px;
+  --rail-ancho: 88px;
+  --lateral-ancho: 248px;
+}
