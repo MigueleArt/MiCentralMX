@@ -1,0 +1,42 @@
+{
+  "name": "micentralmx-api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/servidor.ts",
+    "start": "node dist/src/servidor.js",
+    "db:migrar:dist": "node dist/scripts/migrar.js",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "db:migrar": "tsx --env-file=.env scripts/migrar.ts",
+    "db:semilla": "tsx --env-file=.env scripts/semilla.ts",
+    "test": "vitest run",
+    "tareas:nocturnas": "tsx --env-file=.env scripts/nocturnas.ts"
+  },
+  "dependencies": {
+    "@micentralmx/shared": "*",
+    "argon2": "^0.45.1",
+    "cookie-parser": "^1.4.7",
+    "decimal.js": "^10.6.0",
+    "drizzle-orm": "^0.45.4",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "uuid": "^14.0.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

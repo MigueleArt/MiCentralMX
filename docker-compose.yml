@@ -1,0 +1,58 @@
+# MiCentralMX: PostgreSQL 18 + API + Caddy (decisiones técnicas §8).
+# Copia .env.example a .env, cambia las contraseñas y ejecuta: docker compose up -d --build
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      MC_OWNER_PASSWORD: ${MC_OWNER_PASSWORD:?}
+      MC_APP_PASSWORD: ${MC_APP_PASSWORD:?}
+      MC_PLATAFORMA_PASSWORD: ${MC_PLATAFORMA_PASSWORD:?}
+      TZ: America/Mexico_City
+    volumes:
+      - datos-postgres:/var/lib/postgresql
+      # Crea los roles mc_owner, mc_app y mc_plataforma y la base micentralmx en el primer arranque.
+      - ./database/inicial:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d micentralmx']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PUERTO: 3000
+      DATABASE_URL: postgres://mc_app:${MC_APP_PASSWORD}@db:5432/micentralmx
+      DATABASE_PLATAFORMA_URL: postgres://mc_plataforma:${MC_PLATAFORMA_PASSWORD}@db:5432/micentralmx
+      DATABASE_OWNER_URL: postgres://mc_owner:${MC_OWNER_PASSWORD}@db:5432/micentralmx
+      JWT_SECRETO: ${JWT_SECRETO:?Define JWT_SECRETO (32+ caracteres)}
+      PLATAFORMA_TOKEN: ${PLATAFORMA_TOKEN:?}
+      COOKIE_SEGURA: 'true'
+      TZ: America/Mexico_City
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      DOMINIO: ${DOMINIO:-localhost}
+    ports:
+      - '${PUERTO_HTTP:-80}:80'
+      - '${PUERTO_HTTPS:-443}:443'
+    volumes:
+      - datos-caddy:/data
+
+volumes:
+  datos-postgres:
+  datos-caddy:
