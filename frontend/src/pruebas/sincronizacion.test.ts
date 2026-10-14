@@ -4,7 +4,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { api, fijarToken, usarTransporte } from '../api/cliente';
-import type { OperacionEnRevision } from '@micentralmx/shared/api';
+import type { OperacionEnRevision, UsuarioNegocio } from '@micentralmx/shared/api';
 import { cerrarSesion, ErrorSesion, iniciarSesion, restaurarSesion } from '../auth/sesion';
 import { db } from '../db/db';
 import { catalogo, clientesVista, existenciasEfectivas, ventaVista } from '../dominio/consultas';
@@ -189,6 +189,21 @@ describe('revisiones (servidor de demostración)', () => {
 });
 
 describe('sesión', () => {
+  it('HU-006: impide entrar al usuario inactivo y vuelve a permitirlo al reactivarlo', async () => {
+    await entrar('ana');
+    const usuarios = await api<UsuarioNegocio[]>('GET', '/usuarios');
+    const luis = usuarios.find((u) => u.usuario === 'luis')!;
+    await api('PATCH', `/usuarios/${luis.id}`, { activo: false });
+    await cerrarSesion();
+
+    await expect(iniciarSesion('luis', 'demo1234')).rejects.toMatchObject({ estado: 403 });
+
+    await iniciarSesion('ana', 'demo1234');
+    await api('PATCH', `/usuarios/${luis.id}`, { activo: true });
+    await cerrarSesion();
+    await expect(iniciarSesion('luis', 'demo1234')).resolves.toMatchObject({ usuario: { id: luis.id } });
+  });
+
   it('HU-005: cerrar sesión elimina el contexto local e invalida el acceso posterior', async () => {
     await entrar('ana');
 
