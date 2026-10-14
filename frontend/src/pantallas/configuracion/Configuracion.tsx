@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router';
 import { api, mensajeError } from '../../api/cliente';
 import { cerrarSesion } from '../../auth/sesion';
 import { useSesionActiva } from '../../auth/SesionContext';
+import { errorNuevaContrasena } from '../../auth/validarContrasena';
 import { useAvisos } from '../../componentes/Avisos';
 import { AvisoLinea } from '../../componentes/Estados';
 import { Campo, Entrada } from '../../componentes/Formulario';
@@ -23,10 +24,10 @@ function DatosNegocio({ alCerrar }: { alCerrar: () => void }) {
   const qc = useQueryClient();
   const avisar = useAvisos();
   const q = useQuery({ queryKey: ['configuracion'], queryFn: () => api<Negocio & ConfiguracionNegocio>('GET', '/configuracion') });
-  const [v, setV] = useState<{ nombre: string; ubicacion: string; horas: string; plazo: string } | null>(null);
-  if (q.data && !v) setV({ nombre: q.data.nombre, ubicacion: q.data.ubicacion ?? '', horas: String(q.data.ventanaOfflineHoras), plazo: String(q.data.plazoCreditoDias) });
+  const [v, setV] = useState<{ nombre: string; telefono: string; ubicacion: string; horas: string; plazo: string } | null>(null);
+  if (q.data && !v) setV({ nombre: q.data.nombre, telefono: q.data.telefono ?? '', ubicacion: q.data.ubicacion ?? '', horas: String(q.data.ventanaOfflineHoras), plazo: String(q.data.plazoCreditoDias) });
   const m = useMutation({
-    mutationFn: () => guardarConfiguracion({ nombre: v!.nombre, ubicacion: v!.ubicacion || null, ventanaOfflineHoras: Number(v!.horas), plazoCreditoDias: Number(v!.plazo) }),
+    mutationFn: () => guardarConfiguracion({ nombre: v!.nombre, telefono: v!.telefono || null, ubicacion: v!.ubicacion || null, ventanaOfflineHoras: Number(v!.horas), plazoCreditoDias: Number(v!.plazo) }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['configuracion'] });
       avisar('Configuración guardada');
@@ -43,6 +44,9 @@ function DatosNegocio({ alCerrar }: { alCerrar: () => void }) {
           </Campo>
           <Campo etiqueta="Ubicación" id="n-ubic" opcional>
             <Entrada id="n-ubic" value={v.ubicacion} onChange={(e) => setV({ ...v, ubicacion: e.target.value })} />
+          </Campo>
+          <Campo etiqueta="Teléfono" id="n-tel" opcional>
+            <Entrada id="n-tel" type="tel" autoComplete="tel" value={v.telefono} onChange={(e) => setV({ ...v, telefono: e.target.value })} />
           </Campo>
           <Campo etiqueta="Horas sin conexión permitidas" id="n-horas" ayuda="Después de este tiempo sin contacto con el servidor, la app queda en solo lectura.">
             <Entrada id="n-horas" inputMode="numeric" value={v.horas} onChange={(e) => setV({ ...v, horas: e.target.value.replace(/\D/g, '') })} />
@@ -64,8 +68,14 @@ function CambiarContrasena({ alCerrar }: { alCerrar: () => void }) {
   const avisar = useAvisos();
   const [actual, setActual] = useState('');
   const [nueva, setNueva] = useState('');
+  const [confirmacion, setConfirmacion] = useState('');
   const m = useMutation({
-    mutationFn: () => cambiarContrasena(actual, nueva),
+    mutationFn: () => {
+      if (!actual) throw new Error('Escribe tu contraseña actual.');
+      const error = errorNuevaContrasena(nueva, confirmacion);
+      if (error) throw new Error(error);
+      return cambiarContrasena(actual, nueva);
+    },
     onSuccess: () => {
       avisar('Contraseña actualizada');
       alCerrar();
@@ -79,8 +89,11 @@ function CambiarContrasena({ alCerrar }: { alCerrar: () => void }) {
       <Campo etiqueta="Nueva contraseña" id="c-nueva" ayuda="Mínimo 8 caracteres.">
         <Entrada id="c-nueva" type="password" autoComplete="new-password" value={nueva} onChange={(e) => setNueva(e.target.value)} />
       </Campo>
+      <Campo etiqueta="Confirmar nueva contraseña" id="c-confirmacion">
+        <Entrada id="c-confirmacion" type="password" autoComplete="new-password" value={confirmacion} onChange={(e) => setConfirmacion(e.target.value)} />
+      </Campo>
       {m.isError && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{mensajeError(m.error)}</AvisoLinea>}
-      <button type="button" className="btn btn-p" disabled={m.isPending || !actual || nueva.length < 8} onClick={() => m.mutate()}>
+      <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate()}>
         Cambiar contraseña
       </button>
     </HojaInferior>
@@ -148,7 +161,11 @@ export default function Configuracion() {
             <dl className="card" style={{ padding: '4px 16px' }}>
               <div className="kv">
                 <dt>Estado</dt>
-                <dd><EstadoSync /></dd>
+                <dd><EstadoSync largo /></dd>
+              </div>
+              <div className="kv">
+                <dt>Cambios pendientes</dt>
+                <dd className="num">{r.pendientes}</dd>
               </div>
               <div className="kv">
                 <dt>Última sincronización</dt>

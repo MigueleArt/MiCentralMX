@@ -26,7 +26,7 @@ export const aUsuarioSesion = (u: UsuarioActual): UsuarioSesion => ({
 export async function negocioYConfiguracion(tx: Tx, negocioId: string): Promise<{ negocio: Negocio; configuracion: ConfiguracionNegocio }> {
   const [n] = await tx.select().from(negocios).where(eq(negocios.id, negocioId));
   return {
-    negocio: { id: n.id, nombre: n.nombre, ubicacion: n.ubicacion },
+    negocio: { id: n.id, nombre: n.nombre, telefono: n.telefono, ubicacion: n.ubicacion },
     configuracion: { ventanaOfflineHoras: n.ventanaOfflineHoras, plazoCreditoDias: n.plazoCreditoDias },
   };
 }

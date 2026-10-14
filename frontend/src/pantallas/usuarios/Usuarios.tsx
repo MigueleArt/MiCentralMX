@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CircleAlert, Pencil, UserPlus, X } from 'lucide-react';
+import { Check, CircleAlert, Pencil, ShieldAlert, UserCheck, UserPlus, UserX, X } from 'lucide-react';
 import { useState } from 'react';
 import { api, mensajeError } from '../../api/cliente';
+import { errorNuevaContrasena } from '../../auth/validarContrasena';
 import { useSesionActiva } from '../../auth/SesionContext';
 import { useAvisos } from '../../componentes/Avisos';
 import { AvisoLinea, ErrorConsulta, Esqueleto } from '../../componentes/Estados';
 import { Campo, Entrada } from '../../componentes/Formulario';
-import { HojaInferior } from '../../componentes/Superpuestos';
+import { Dialogo, HojaInferior } from '../../componentes/Superpuestos';
 import type { RolNegocio, UsuarioNegocio } from '@micentralmx/shared/api';
 import { PERMISOS, type Permiso } from '@micentralmx/shared/permisos';
 import { crearUsuario, editarRol, editarUsuario } from '../../dominio/enLinea';
@@ -16,10 +17,14 @@ import { haceCuanto } from '../../lib/fechas';
 import { iniciales } from '../../lib/ids';
 import { useConectividad } from '../../sync/conectividad';
 
+const PERMISOS_CRITICOS: Permiso[] = ['usuarios.gestionar', 'configuracion.editar', 'revisiones.resolver'];
+
 function EditarRol({ rol, alCerrar }: { rol: RolNegocio; alCerrar: () => void }) {
   const qc = useQueryClient();
   const avisar = useAvisos();
   const [permisos, setPermisos] = useState<string[]>(rol.permisos);
+  const [confirmarCriticos, setConfirmarCriticos] = useState(false);
+  const criticosNuevos = PERMISOS_CRITICOS.filter((p) => permisos.includes(p) && !rol.permisos.includes(p));
   const m = useMutation({
     mutationFn: () => editarRol(rol.id, permisos),
     onSuccess: () => {
@@ -28,6 +33,10 @@ function EditarRol({ rol, alCerrar }: { rol: RolNegocio; alCerrar: () => void })
       alCerrar();
     },
   });
+  const guardar = () => {
+    if (criticosNuevos.length > 0) setConfirmarCriticos(true);
+    else m.mutate();
+  };
   return (
     <HojaInferior titulo={`Qué puede hacer un ${rol.nombre}`} alCerrar={alCerrar}>
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -44,9 +53,27 @@ function EditarRol({ rol, alCerrar }: { rol: RolNegocio; alCerrar: () => void })
         ))}
       </div>
       {m.isError && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{mensajeError(m.error)}</AvisoLinea>}
-      <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate()}>
+      <button type="button" className="btn btn-p" disabled={m.isPending} onClick={guardar}>
         Guardar permisos
       </button>
+      {confirmarCriticos && (
+        <Dialogo
+          titulo="Confirmar permisos administrativos"
+          icono={<ShieldAlert className="ic" />}
+          tono="aviso"
+          alCerrar={() => setConfirmarCriticos(false)}
+          acciones={
+            <>
+              <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate()}>Sí, otorgar permisos</button>
+              <button type="button" className="btn btn-q" disabled={m.isPending} onClick={() => setConfirmarCriticos(false)}>Cancelar</button>
+            </>
+          }
+        >
+          <p className="t-2">
+            El rol Trabajador recibirá: {criticosNuevos.map((p) => PERMISOS[p]).join(', ')}. Estas acciones permiten modificar información sensible del negocio.
+          </p>
+        </Dialogo>
+      )}
     </HojaInferior>
   );
 }
@@ -59,10 +86,17 @@ function FormUsuario({ usuario, roles, alCerrar }: { usuario: UsuarioNegocio | n
   const [login, setLogin] = useState(usuario?.usuario ?? '');
   const [rolId, setRolId] = useState(usuario?.rolId ?? roles.find((r) => r.base === 'trabajador')?.id ?? '');
   const [contrasena, setContrasena] = useState('');
+  const [confirmacion, setConfirmacion] = useState('');
+  const [confirmarEstado, setConfirmarEstado] = useState<boolean | null>(null);
   const esDueno = roles.find((r) => r.id === usuario?.rolId)?.base === 'dueno';
   const m = useMutation({
-    mutationFn: (extra: { activo?: boolean } = {}) =>
-      usuario ? editarUsuario(usuario.id, { nombre, rolId, ...(contrasena ? { contrasena } : {}), ...extra }) : crearUsuario({ nombre, usuario: login, rolId, contrasena }),
+    mutationFn: (extra: { activo?: boolean } = {}) => {
+      if (usuario && contrasena) {
+        const error = errorNuevaContrasena(contrasena, confirmacion);
+        if (error) throw new Error(error);
+      }
+      return usuario ? editarUsuario(usuario.id, { nombre, rolId, ...(contrasena ? { contrasena } : {}), ...extra }) : crearUsuario({ nombre, usuario: login, rolId, contrasena });
+    },
     onSuccess: (_, extra) => {
       void qc.invalidateQueries({ queryKey: ['usuarios'] });
       avisar(extra?.activo === false ? 'Usuario suspendido' : extra?.activo ? 'Usuario reactivado' : usuario ? 'Usuario actualizado' : 'Usuario agregado');
@@ -89,16 +123,43 @@ function FormUsuario({ usuario, roles, alCerrar }: { usuario: UsuarioNegocio | n
       <Campo etiqueta={usuario ? 'Restablecer contraseña' : 'Contraseña'} id="u-pass" opcional={!!usuario} ayuda="Mínimo 8 caracteres.">
         <Entrada id="u-pass" type="password" autoComplete="new-password" value={contrasena} onChange={(e) => setContrasena(e.target.value)} />
       </Campo>
+      {usuario && (
+        <Campo etiqueta="Confirmar nueva contraseña" id="u-pass-confirm" opcional={!contrasena}>
+          <Entrada id="u-pass-confirm" type="password" autoComplete="new-password" value={confirmacion} onChange={(e) => setConfirmacion(e.target.value)} />
+        </Campo>
+      )}
       {m.isError && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{mensajeError(m.error)}</AvisoLinea>}
       <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate({})}>
         {usuario ? 'Guardar cambios' : 'Agregar usuario'}
       </button>
       {usuario && !esDueno && usuario.id !== sesion.usuario.id && (
-        <button type="button" className={`btn ${usuario.activo ? 'btn-g' : 'btn-s'}`} style={usuario.activo ? { color: 'var(--error-texto)' } : undefined} disabled={m.isPending} onClick={() => m.mutate({ activo: !usuario.activo })}>
+        <button type="button" className={`btn ${usuario.activo ? 'btn-g' : 'btn-s'}`} style={usuario.activo ? { color: 'var(--error-texto)' } : undefined} disabled={m.isPending} onClick={() => setConfirmarEstado(!usuario.activo)}>
           {usuario.activo ? 'Suspender usuario' : 'Reactivar usuario'}
         </button>
       )}
       {usuario?.activo && !esDueno && <p className="hint">Lo que registre sin conexión después de suspenderlo quedará en revisión.</p>}
+      {usuario && confirmarEstado !== null && (
+        <Dialogo
+          titulo={confirmarEstado ? `¿Reactivar a ${usuario.nombre}?` : `¿Suspender a ${usuario.nombre}?`}
+          icono={confirmarEstado ? <UserCheck className="ic" /> : <UserX className="ic" />}
+          tono={confirmarEstado ? 'neutro' : 'peligro'}
+          alCerrar={() => setConfirmarEstado(null)}
+          acciones={
+            <>
+              <button type="button" className={`btn ${confirmarEstado ? 'btn-p' : 'btn-g'}`} disabled={m.isPending} onClick={() => m.mutate({ activo: confirmarEstado })}>
+                {confirmarEstado ? 'Sí, reactivar' : 'Sí, suspender'}
+              </button>
+              <button type="button" className="btn btn-q" disabled={m.isPending} onClick={() => setConfirmarEstado(null)}>Cancelar</button>
+            </>
+          }
+        >
+          <p className="t-2">
+            {confirmarEstado
+              ? 'La cuenta recuperará el acceso con sus credenciales actuales.'
+              : 'La cuenta perderá el acceso, pero sus operaciones y su historial se conservarán.'}
+          </p>
+        </Dialogo>
+      )}
     </HojaInferior>
   );
 }

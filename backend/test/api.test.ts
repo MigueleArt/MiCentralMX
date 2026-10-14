@@ -19,6 +19,23 @@ beforeEach(async () => {
 });
 
 describe('autenticación', () => {
+  it('HU-109: actualiza la actividad solo después de un acceso válido', async () => {
+    const ana = await entrar('ana');
+    const leerCarlos = async () => {
+      const lista = (await ana.get('/usuarios').expect(200)).body as Array<{ usuario: string; ultimaActividad: string | null }>;
+      return lista.find((u) => u.usuario === 'carlos')!;
+    };
+    const antes = await leerCarlos();
+
+    await request(app).post('/api/auth/login').send({ usuario: 'carlos', contrasena: 'incorrecta' }).expect(401);
+    expect((await leerCarlos()).ultimaActividad).toBe(antes.ultimaActividad);
+
+    await request(app).post('/api/auth/login').send({ usuario: 'carlos', contrasena: 'demo1234' }).expect(200);
+    const despues = await leerCarlos();
+    expect(despues.ultimaActividad).not.toBeNull();
+    expect(new Date(despues.ultimaActividad!).getTime()).toBeGreaterThan(new Date(antes.ultimaActividad!).getTime());
+  });
+
   it('rechaza credenciales incorrectas y limita intentos', async () => {
     for (let i = 0; i < 5; i++) await request(app).post('/api/auth/login').send({ usuario: 'ana', contrasena: 'mala' }).expect(401);
     const r = await request(app).post('/api/auth/login').send({ usuario: 'ana', contrasena: 'demo1234' });
@@ -204,6 +221,44 @@ describe('revisiones', () => {
 });
 
 describe('operaciones en línea', () => {
+  it('HU-123: edita solo el negocio actual sin alterar sus operaciones', async () => {
+    const ana = await entrar('ana');
+    const carlos = await entrar('carlos');
+    const ventasAntes = (await bajar(ana)).cambios.ventas.map((v: { id: string }) => v.id).sort();
+    const datos = {
+      nombre: 'Bodega Actualizada',
+      telefono: '55 9876 5432',
+      ubicacion: 'Nave II',
+      ventanaOfflineHoras: 24,
+      plazoCreditoDias: 7,
+    };
+
+    await carlos.patch('/configuracion', datos).expect(403);
+    await ana.patch('/configuracion', { ...datos, nombre: '' }).expect(422);
+    expect((await ana.patch('/configuracion', datos).expect(200)).body).toMatchObject(datos);
+    expect((await ana.get('/configuracion').expect(200)).body).toMatchObject(datos);
+
+    const ventasDespues = (await bajar(ana)).cambios.ventas.map((v: { id: string }) => v.id).sort();
+    expect(ventasDespues).toEqual(ventasAntes);
+  });
+
+  it('HU-107: aplica y retira permisos del Trabajador en solicitudes posteriores', async () => {
+    const ana = await entrar('ana');
+    const carlos = await entrar('carlos');
+    const hoy = new Date().toISOString().slice(0, 10);
+    const rutaReporte = `/reportes/resumen?desde=${hoy}&hasta=${hoy}`;
+    await carlos.get(rutaReporte).expect(403);
+
+    const roles = (await ana.get('/roles').expect(200)).body as Array<{ id: string; base: string; permisos: string[] }>;
+    const trabajador = roles.find((r) => r.base === 'trabajador')!;
+    const conReportes = [...new Set([...trabajador.permisos, 'reportes.ver'])];
+    await ana.put(`/roles/${trabajador.id}`, { permisos: conReportes }).expect(200);
+    await carlos.get(rutaReporte).expect(200);
+
+    await ana.put(`/roles/${trabajador.id}`, { permisos: trabajador.permisos }).expect(200);
+    await carlos.get(rutaReporte).expect(403);
+  });
+
   it('cancelar una venta regresa la mercancía al inventario', async () => {
     const ana = await entrar('ana');
     const c = await clasificacion(ana, 'Limón persa', 'Segunda / Mediano');
@@ -239,9 +294,21 @@ describe('operaciones en línea', () => {
     const ana = await entrar('ana');
     const luis = await entrar('luis');
     await ana.patch(`/usuarios/${luis.usuarioId}`, { activo: false }).expect(200);
+    const suspendido = (await ana.get('/usuarios').expect(200)).body.find((u: { id: string }) => u.id === luis.usuarioId);
+    expect(suspendido).toMatchObject({ id: luis.usuarioId, activo: false });
     await luis.get('/configuracion').expect(401);
     await request(app).post('/api/auth/login').send({ usuario: 'luis', contrasena: 'demo1234' }).expect(403);
     await ana.patch(`/usuarios/${luis.usuarioId}`, { activo: true }).expect(200);
+    await request(app).post('/api/auth/login').send({ usuario: 'luis', contrasena: 'demo1234' }).expect(200);
+  });
+
+  it('HU-105: no permite suspender al Dueño y conserva una administración válida', async () => {
+    const ana = await entrar('ana');
+    const usuarios = (await ana.get('/usuarios').expect(200)).body as Array<{ id: string; rolNombre: string; activo: boolean }>;
+    const dueno = usuarios.find((u) => u.rolNombre === 'Dueño')!;
+
+    await ana.patch(`/usuarios/${dueno.id}`, { activo: false }).expect(409);
+    expect((await ana.get('/usuarios').expect(200)).body.find((u: { id: string }) => u.id === dueno.id)).toMatchObject({ activo: true });
   });
 
   it('reportes e historial responden con datos del negocio', async () => {
