@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { mensajeError } from '../api/cliente';
 import { iniciarSesion } from '../auth/sesion';
 import { useSesion } from '../auth/SesionContext';
+import { validarLogin, type ErroresLogin } from '../auth/validarLogin';
 import { AvisoLinea } from '../componentes/Estados';
 import { Campo, Entrada } from '../componentes/Formulario';
 import { Marca } from '../componentes/Marca';
@@ -21,14 +22,17 @@ export default function Login() {
   const [ver, setVer] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [erroresCampos, setErroresCampos] = useState<ErroresLogin>({});
   const [olvido, setOlvido] = useState(false);
 
   if (sesion) return <Navigate to="/" replace />;
 
   const entrar = async (e: FormEvent) => {
     e.preventDefault();
-    if (!usuario.trim() || !contrasena) {
-      setError('Escribe tu usuario y tu contraseña.');
+    const errores = validarLogin(usuario, contrasena);
+    setErroresCampos(errores);
+    if (Object.keys(errores).length > 0) {
+      setError('Completa la información indicada.');
       return;
     }
     setEnviando(true);
@@ -59,7 +63,20 @@ export default function Login() {
 
         <form className="pila-16" onSubmit={entrar} noValidate>
           <Campo etiqueta="Usuario o teléfono" id="u">
-            <Entrada id="u" type="text" autoComplete="username" placeholder="Ej. 55 1234 5678" value={usuario} onChange={(e) => setUsuario(e.target.value)} />
+            <Entrada
+              id="u"
+              type="text"
+              autoComplete="username"
+              placeholder="Ej. 55 1234 5678"
+              value={usuario}
+              aria-invalid={!!erroresCampos.usuario}
+              aria-describedby={erroresCampos.usuario ? 'u-error' : undefined}
+              onChange={(e) => {
+                setUsuario(e.target.value);
+                if (erroresCampos.usuario) setErroresCampos((actual) => ({ ...actual, usuario: undefined }));
+              }}
+            />
+            {erroresCampos.usuario && <span id="u-error" className="hint" style={{ color: 'var(--error-texto)' }}>{erroresCampos.usuario}</span>}
           </Campo>
           <Campo etiqueta="Contraseña" id="p">
             <div style={{ position: 'relative' }}>
@@ -68,7 +85,12 @@ export default function Login() {
                 type={ver ? 'text' : 'password'}
                 autoComplete="current-password"
                 value={contrasena}
-                onChange={(e) => setContrasena(e.target.value)}
+                aria-invalid={!!erroresCampos.contrasena}
+                aria-describedby={erroresCampos.contrasena ? 'p-error' : undefined}
+                onChange={(e) => {
+                  setContrasena(e.target.value);
+                  if (erroresCampos.contrasena) setErroresCampos((actual) => ({ ...actual, contrasena: undefined }));
+                }}
                 style={{ paddingRight: 52 }}
               />
               <button
@@ -81,6 +103,7 @@ export default function Login() {
                 {ver ? <EyeOff className="ic" /> : <Eye className="ic" />}
               </button>
             </div>
+            {erroresCampos.contrasena && <span id="p-error" className="hint" style={{ color: 'var(--error-texto)' }}>{erroresCampos.contrasena}</span>}
           </Campo>
 
           {!enLinea && (
