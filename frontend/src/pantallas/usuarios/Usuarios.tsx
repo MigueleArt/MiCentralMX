@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CircleAlert, Pencil, UserCheck, UserPlus, UserX, X } from 'lucide-react';
+import { Check, CircleAlert, Pencil, ShieldAlert, UserCheck, UserPlus, UserX, X } from 'lucide-react';
 import { useState } from 'react';
 import { api, mensajeError } from '../../api/cliente';
 import { errorNuevaContrasena } from '../../auth/validarContrasena';
@@ -17,10 +17,14 @@ import { haceCuanto } from '../../lib/fechas';
 import { iniciales } from '../../lib/ids';
 import { useConectividad } from '../../sync/conectividad';
 
+const PERMISOS_CRITICOS: Permiso[] = ['usuarios.gestionar', 'configuracion.editar', 'revisiones.resolver'];
+
 function EditarRol({ rol, alCerrar }: { rol: RolNegocio; alCerrar: () => void }) {
   const qc = useQueryClient();
   const avisar = useAvisos();
   const [permisos, setPermisos] = useState<string[]>(rol.permisos);
+  const [confirmarCriticos, setConfirmarCriticos] = useState(false);
+  const criticosNuevos = PERMISOS_CRITICOS.filter((p) => permisos.includes(p) && !rol.permisos.includes(p));
   const m = useMutation({
     mutationFn: () => editarRol(rol.id, permisos),
     onSuccess: () => {
@@ -29,6 +33,10 @@ function EditarRol({ rol, alCerrar }: { rol: RolNegocio; alCerrar: () => void })
       alCerrar();
     },
   });
+  const guardar = () => {
+    if (criticosNuevos.length > 0) setConfirmarCriticos(true);
+    else m.mutate();
+  };
   return (
     <HojaInferior titulo={`Qué puede hacer un ${rol.nombre}`} alCerrar={alCerrar}>
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -45,9 +53,27 @@ function EditarRol({ rol, alCerrar }: { rol: RolNegocio; alCerrar: () => void })
         ))}
       </div>
       {m.isError && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{mensajeError(m.error)}</AvisoLinea>}
-      <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate()}>
+      <button type="button" className="btn btn-p" disabled={m.isPending} onClick={guardar}>
         Guardar permisos
       </button>
+      {confirmarCriticos && (
+        <Dialogo
+          titulo="Confirmar permisos administrativos"
+          icono={<ShieldAlert className="ic" />}
+          tono="aviso"
+          alCerrar={() => setConfirmarCriticos(false)}
+          acciones={
+            <>
+              <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate()}>Sí, otorgar permisos</button>
+              <button type="button" className="btn btn-q" disabled={m.isPending} onClick={() => setConfirmarCriticos(false)}>Cancelar</button>
+            </>
+          }
+        >
+          <p className="t-2">
+            El rol Trabajador recibirá: {criticosNuevos.map((p) => PERMISOS[p]).join(', ')}. Estas acciones permiten modificar información sensible del negocio.
+          </p>
+        </Dialogo>
+      )}
     </HojaInferior>
   );
 }

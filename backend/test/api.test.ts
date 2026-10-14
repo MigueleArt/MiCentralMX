@@ -221,6 +221,23 @@ describe('revisiones', () => {
 });
 
 describe('operaciones en línea', () => {
+  it('HU-107: aplica y retira permisos del Trabajador en solicitudes posteriores', async () => {
+    const ana = await entrar('ana');
+    const carlos = await entrar('carlos');
+    const hoy = new Date().toISOString().slice(0, 10);
+    const rutaReporte = `/reportes/resumen?desde=${hoy}&hasta=${hoy}`;
+    await carlos.get(rutaReporte).expect(403);
+
+    const roles = (await ana.get('/roles').expect(200)).body as Array<{ id: string; base: string; permisos: string[] }>;
+    const trabajador = roles.find((r) => r.base === 'trabajador')!;
+    const conReportes = [...new Set([...trabajador.permisos, 'reportes.ver'])];
+    await ana.put(`/roles/${trabajador.id}`, { permisos: conReportes }).expect(200);
+    await carlos.get(rutaReporte).expect(200);
+
+    await ana.put(`/roles/${trabajador.id}`, { permisos: trabajador.permisos }).expect(200);
+    await carlos.get(rutaReporte).expect(403);
+  });
+
   it('cancelar una venta regresa la mercancía al inventario', async () => {
     const ana = await entrar('ana');
     const c = await clasificacion(ana, 'Limón persa', 'Segunda / Mediano');
