@@ -24,10 +24,10 @@ function DatosNegocio({ alCerrar }: { alCerrar: () => void }) {
   const qc = useQueryClient();
   const avisar = useAvisos();
   const q = useQuery({ queryKey: ['configuracion'], queryFn: () => api<Negocio & ConfiguracionNegocio>('GET', '/configuracion') });
-  const [v, setV] = useState<{ nombre: string; ubicacion: string; horas: string; plazo: string } | null>(null);
-  if (q.data && !v) setV({ nombre: q.data.nombre, ubicacion: q.data.ubicacion ?? '', horas: String(q.data.ventanaOfflineHoras), plazo: String(q.data.plazoCreditoDias) });
+  const [v, setV] = useState<{ nombre: string; telefono: string; ubicacion: string; horas: string; plazo: string } | null>(null);
+  if (q.data && !v) setV({ nombre: q.data.nombre, telefono: q.data.telefono ?? '', ubicacion: q.data.ubicacion ?? '', horas: String(q.data.ventanaOfflineHoras), plazo: String(q.data.plazoCreditoDias) });
   const m = useMutation({
-    mutationFn: () => guardarConfiguracion({ nombre: v!.nombre, ubicacion: v!.ubicacion || null, ventanaOfflineHoras: Number(v!.horas), plazoCreditoDias: Number(v!.plazo) }),
+    mutationFn: () => guardarConfiguracion({ nombre: v!.nombre, telefono: v!.telefono || null, ubicacion: v!.ubicacion || null, ventanaOfflineHoras: Number(v!.horas), plazoCreditoDias: Number(v!.plazo) }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['configuracion'] });
       avisar('Configuración guardada');
@@ -44,6 +44,9 @@ function DatosNegocio({ alCerrar }: { alCerrar: () => void }) {
           </Campo>
           <Campo etiqueta="Ubicación" id="n-ubic" opcional>
             <Entrada id="n-ubic" value={v.ubicacion} onChange={(e) => setV({ ...v, ubicacion: e.target.value })} />
+          </Campo>
+          <Campo etiqueta="Teléfono" id="n-tel" opcional>
+            <Entrada id="n-tel" type="tel" autoComplete="tel" value={v.telefono} onChange={(e) => setV({ ...v, telefono: e.target.value })} />
           </Campo>
           <Campo etiqueta="Horas sin conexión permitidas" id="n-horas" ayuda="Después de este tiempo sin contacto con el servidor, la app queda en solo lectura.">
             <Entrada id="n-horas" inputMode="numeric" value={v.horas} onChange={(e) => setV({ ...v, horas: e.target.value.replace(/\D/g, '') })} />

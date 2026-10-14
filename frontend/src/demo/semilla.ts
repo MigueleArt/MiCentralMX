@@ -318,7 +318,7 @@ export function crearSemilla() {
   ];
 
   return {
-    negocio: { id: nuevoId(), nombre: 'Bodega Hernández', ubicacion: 'Nave I' },
+    negocio: { id: nuevoId(), nombre: 'Bodega Hernández', telefono: '55 1234 5678', ubicacion: 'Nave I' },
     configuracion: { ventanaOfflineHoras: 24, plazoCreditoDias: 7 },
     unidades,
     productos,

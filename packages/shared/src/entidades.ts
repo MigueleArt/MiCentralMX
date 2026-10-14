@@ -190,6 +190,7 @@ export interface UsuarioSesion {
 export interface Negocio {
   id: string;
   nombre: string;
+  telefono: string | null;
   ubicacion: string | null;
 }
 

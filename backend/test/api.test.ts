@@ -221,6 +221,27 @@ describe('revisiones', () => {
 });
 
 describe('operaciones en línea', () => {
+  it('HU-123: edita solo el negocio actual sin alterar sus operaciones', async () => {
+    const ana = await entrar('ana');
+    const carlos = await entrar('carlos');
+    const ventasAntes = (await bajar(ana)).cambios.ventas.map((v: { id: string }) => v.id).sort();
+    const datos = {
+      nombre: 'Bodega Actualizada',
+      telefono: '55 9876 5432',
+      ubicacion: 'Nave II',
+      ventanaOfflineHoras: 24,
+      plazoCreditoDias: 7,
+    };
+
+    await carlos.patch('/configuracion', datos).expect(403);
+    await ana.patch('/configuracion', { ...datos, nombre: '' }).expect(422);
+    expect((await ana.patch('/configuracion', datos).expect(200)).body).toMatchObject(datos);
+    expect((await ana.get('/configuracion').expect(200)).body).toMatchObject(datos);
+
+    const ventasDespues = (await bajar(ana)).cambios.ventas.map((v: { id: string }) => v.id).sort();
+    expect(ventasDespues).toEqual(ventasAntes);
+  });
+
   it('HU-107: aplica y retira permisos del Trabajador en solicitudes posteriores', async () => {
     const ana = await entrar('ana');
     const carlos = await entrar('carlos');

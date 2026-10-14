@@ -12,6 +12,7 @@ const cantidad = (n: string) => numeric(n, { precision: 12, scale: 3 });
 export const negocios = pgTable('negocios', {
   id: uuid('id').primaryKey(),
   nombre: text('nombre').notNull(),
+  telefono: text('telefono'),
   ubicacion: text('ubicacion'),
   ventanaOfflineHoras: integer('ventana_offline_horas').notNull(),
   plazoCreditoDias: integer('plazo_credito_dias').notNull(),

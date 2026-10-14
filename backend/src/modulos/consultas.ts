@@ -38,7 +38,7 @@ rutasConsultas.get(
   '/configuracion',
   rutaNegocio(null, async ({ tx, usuario }) => {
     const [n] = await tx.select().from(negocios).where(eq(negocios.id, usuario.negocioId));
-    return { id: n.id, nombre: n.nombre, ubicacion: n.ubicacion, ventanaOfflineHoras: n.ventanaOfflineHoras, plazoCreditoDias: n.plazoCreditoDias };
+    return { id: n.id, nombre: n.nombre, telefono: n.telefono, ubicacion: n.ubicacion, ventanaOfflineHoras: n.ventanaOfflineHoras, plazoCreditoDias: n.plazoCreditoDias };
   }),
 );
 
@@ -48,20 +48,21 @@ rutasConsultas.patch(
     const d = z
       .object({
         nombre: z.string().trim().min(1).max(120),
+        telefono: z.string().trim().max(30).nullable(),
         ubicacion: z.string().trim().max(200).nullable(),
         ventanaOfflineHoras: z.number().int().min(1, 'Mínimo 1 hora.').max(72, 'Máximo 72 horas.'),
         plazoCreditoDias: z.number().int().min(1).max(120),
       })
       .parse(req.body);
     const [antes] = await tx.select().from(negocios).where(eq(negocios.id, usuario.negocioId));
-    await tx.update(negocios).set({ ...d, ubicacion: d.ubicacion || null }).where(eq(negocios.id, usuario.negocioId));
+    await tx.update(negocios).set({ ...d, telefono: d.telefono || null, ubicacion: d.ubicacion || null }).where(eq(negocios.id, usuario.negocioId));
     await registrarAuditoria(tx, usuario, 'configuracion', `${usuario.nombre} cambió la configuración del negocio`, {
       tabla: 'negocios',
       registroId: usuario.negocioId,
       antes,
       despues: d,
     });
-    return null;
+    return { id: antes.id, ...d, telefono: d.telefono || null, ubicacion: d.ubicacion || null };
   }),
 );
 

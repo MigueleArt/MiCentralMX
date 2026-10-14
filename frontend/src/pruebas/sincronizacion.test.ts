@@ -9,6 +9,7 @@ import { cerrarSesion, ErrorSesion, iniciarSesion, restaurarSesion } from '../au
 import { db } from '../db/db';
 import { catalogo, clientesVista, existenciasEfectivas, ventaVista } from '../dominio/consultas';
 import { ErrorValidacion } from '../dominio/errores';
+import { guardarConfiguracion } from '../dominio/enLinea';
 import { registrarPago, registrarVenta } from '../dominio/operaciones';
 import { manejarSolicitud, reiniciarServidorDemo } from '../demo/servidor';
 import { sincronizar } from '../sync/motor';
@@ -189,6 +190,24 @@ describe('revisiones (servidor de demostración)', () => {
 });
 
 describe('sesión', () => {
+  it('HU-123: actualiza los datos del negocio en la sesión actual', async () => {
+    await entrar('ana');
+
+    await guardarConfiguracion({
+      nombre: 'Bodega Actualizada',
+      telefono: '55 9876 5432',
+      ubicacion: 'Nave II',
+      ventanaOfflineHoras: 24,
+      plazoCreditoDias: 7,
+    });
+
+    expect((await db.leerMeta('sesion'))?.negocio).toMatchObject({
+      nombre: 'Bodega Actualizada',
+      telefono: '55 9876 5432',
+      ubicacion: 'Nave II',
+    });
+  });
+
   it('HU-006: impide entrar al usuario inactivo y vuelve a permitirlo al reactivarlo', async () => {
     await entrar('ana');
     const usuarios = await api<UsuarioNegocio[]>('GET', '/usuarios');
