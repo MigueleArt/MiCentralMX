@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { api, fijarToken, usarTransporte } from '../api/cliente';
 import type { OperacionEnRevision } from '@micentralmx/shared/api';
-import { cerrarSesion, ErrorSesion, iniciarSesion } from '../auth/sesion';
+import { cerrarSesion, ErrorSesion, iniciarSesion, restaurarSesion } from '../auth/sesion';
 import { db } from '../db/db';
 import { catalogo, clientesVista, existenciasEfectivas, ventaVista } from '../dominio/consultas';
 import { ErrorValidacion } from '../dominio/errores';
@@ -189,6 +189,17 @@ describe('revisiones (servidor de demostración)', () => {
 });
 
 describe('sesión', () => {
+  it('elimina la sesión local cuando el servidor informa que dejó de ser válida', async () => {
+    await entrar('ana');
+    expect(await db.leerMeta('sesion')).toBeDefined();
+
+    // Invalida el refresh del servidor sin ejecutar el cierre local.
+    await api('POST', '/auth/logout', {});
+    await restaurarSesion();
+
+    expect(await db.leerMeta('sesion')).toBeUndefined();
+  });
+
   it('no permite cerrar sesión con operaciones pendientes', async () => {
     await entrar('ana');
     const segunda = await clasificacion('Jitomate Saladette', 'Segunda / Mediano');

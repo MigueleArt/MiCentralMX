@@ -114,9 +114,14 @@ export async function iniciarSesion(usuario: string, contrasena: string): Promis
 export async function restaurarSesion(): Promise<void> {
   if (!(await db.leerMeta('sesion'))) return;
   try {
-    await refrescarToken();
-  } catch {
+    const valida = await refrescarToken();
+    if (!valida) {
+      fijarToken(null);
+      await db.borrarMeta('sesion');
+    }
+  } catch (e) {
     // Sin conexión: se trabaja dentro de la ventana offline.
+    if (!(e instanceof ErrorRed)) throw e;
   }
 }
 
