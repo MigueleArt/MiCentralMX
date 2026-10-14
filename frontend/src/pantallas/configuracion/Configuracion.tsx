@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router';
 import { api, mensajeError } from '../../api/cliente';
 import { cerrarSesion } from '../../auth/sesion';
 import { useSesionActiva } from '../../auth/SesionContext';
+import { errorNuevaContrasena } from '../../auth/validarContrasena';
 import { useAvisos } from '../../componentes/Avisos';
 import { AvisoLinea } from '../../componentes/Estados';
 import { Campo, Entrada } from '../../componentes/Formulario';
@@ -64,8 +65,14 @@ function CambiarContrasena({ alCerrar }: { alCerrar: () => void }) {
   const avisar = useAvisos();
   const [actual, setActual] = useState('');
   const [nueva, setNueva] = useState('');
+  const [confirmacion, setConfirmacion] = useState('');
   const m = useMutation({
-    mutationFn: () => cambiarContrasena(actual, nueva),
+    mutationFn: () => {
+      if (!actual) throw new Error('Escribe tu contraseña actual.');
+      const error = errorNuevaContrasena(nueva, confirmacion);
+      if (error) throw new Error(error);
+      return cambiarContrasena(actual, nueva);
+    },
     onSuccess: () => {
       avisar('Contraseña actualizada');
       alCerrar();
@@ -79,8 +86,11 @@ function CambiarContrasena({ alCerrar }: { alCerrar: () => void }) {
       <Campo etiqueta="Nueva contraseña" id="c-nueva" ayuda="Mínimo 8 caracteres.">
         <Entrada id="c-nueva" type="password" autoComplete="new-password" value={nueva} onChange={(e) => setNueva(e.target.value)} />
       </Campo>
+      <Campo etiqueta="Confirmar nueva contraseña" id="c-confirmacion">
+        <Entrada id="c-confirmacion" type="password" autoComplete="new-password" value={confirmacion} onChange={(e) => setConfirmacion(e.target.value)} />
+      </Campo>
       {m.isError && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{mensajeError(m.error)}</AvisoLinea>}
-      <button type="button" className="btn btn-p" disabled={m.isPending || !actual || nueva.length < 8} onClick={() => m.mutate()}>
+      <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate()}>
         Cambiar contraseña
       </button>
     </HojaInferior>
