@@ -189,6 +189,15 @@ describe('revisiones (servidor de demostración)', () => {
 });
 
 describe('sesión', () => {
+  it('HU-005: cerrar sesión elimina el contexto local e invalida el acceso posterior', async () => {
+    await entrar('ana');
+
+    await cerrarSesion();
+
+    expect(await db.leerMeta('sesion')).toBeUndefined();
+    await expect(api('GET', '/configuracion')).rejects.toMatchObject({ estado: 401 });
+  });
+
   it('elimina la sesión local cuando el servidor informa que dejó de ser válida', async () => {
     await entrar('ana');
     expect(await db.leerMeta('sesion')).toBeDefined();
