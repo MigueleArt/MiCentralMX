@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, CircleAlert, Pencil, UserPlus, X } from 'lucide-react';
 import { useState } from 'react';
 import { api, mensajeError } from '../../api/cliente';
+import { errorNuevaContrasena } from '../../auth/validarContrasena';
 import { useSesionActiva } from '../../auth/SesionContext';
 import { useAvisos } from '../../componentes/Avisos';
 import { AvisoLinea, ErrorConsulta, Esqueleto } from '../../componentes/Estados';
@@ -59,10 +60,16 @@ function FormUsuario({ usuario, roles, alCerrar }: { usuario: UsuarioNegocio | n
   const [login, setLogin] = useState(usuario?.usuario ?? '');
   const [rolId, setRolId] = useState(usuario?.rolId ?? roles.find((r) => r.base === 'trabajador')?.id ?? '');
   const [contrasena, setContrasena] = useState('');
+  const [confirmacion, setConfirmacion] = useState('');
   const esDueno = roles.find((r) => r.id === usuario?.rolId)?.base === 'dueno';
   const m = useMutation({
-    mutationFn: (extra: { activo?: boolean } = {}) =>
-      usuario ? editarUsuario(usuario.id, { nombre, rolId, ...(contrasena ? { contrasena } : {}), ...extra }) : crearUsuario({ nombre, usuario: login, rolId, contrasena }),
+    mutationFn: (extra: { activo?: boolean } = {}) => {
+      if (usuario && contrasena) {
+        const error = errorNuevaContrasena(contrasena, confirmacion);
+        if (error) throw new Error(error);
+      }
+      return usuario ? editarUsuario(usuario.id, { nombre, rolId, ...(contrasena ? { contrasena } : {}), ...extra }) : crearUsuario({ nombre, usuario: login, rolId, contrasena });
+    },
     onSuccess: (_, extra) => {
       void qc.invalidateQueries({ queryKey: ['usuarios'] });
       avisar(extra?.activo === false ? 'Usuario suspendido' : extra?.activo ? 'Usuario reactivado' : usuario ? 'Usuario actualizado' : 'Usuario agregado');
@@ -89,6 +96,11 @@ function FormUsuario({ usuario, roles, alCerrar }: { usuario: UsuarioNegocio | n
       <Campo etiqueta={usuario ? 'Restablecer contraseña' : 'Contraseña'} id="u-pass" opcional={!!usuario} ayuda="Mínimo 8 caracteres.">
         <Entrada id="u-pass" type="password" autoComplete="new-password" value={contrasena} onChange={(e) => setContrasena(e.target.value)} />
       </Campo>
+      {usuario && (
+        <Campo etiqueta="Confirmar nueva contraseña" id="u-pass-confirm" opcional={!contrasena}>
+          <Entrada id="u-pass-confirm" type="password" autoComplete="new-password" value={confirmacion} onChange={(e) => setConfirmacion(e.target.value)} />
+        </Campo>
+      )}
       {m.isError && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{mensajeError(m.error)}</AvisoLinea>}
       <button type="button" className="btn btn-p" disabled={m.isPending} onClick={() => m.mutate({})}>
         {usuario ? 'Guardar cambios' : 'Agregar usuario'}
