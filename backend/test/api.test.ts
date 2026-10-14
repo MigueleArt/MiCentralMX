@@ -19,6 +19,23 @@ beforeEach(async () => {
 });
 
 describe('autenticación', () => {
+  it('HU-109: actualiza la actividad solo después de un acceso válido', async () => {
+    const ana = await entrar('ana');
+    const leerCarlos = async () => {
+      const lista = (await ana.get('/usuarios').expect(200)).body as Array<{ usuario: string; ultimaActividad: string | null }>;
+      return lista.find((u) => u.usuario === 'carlos')!;
+    };
+    const antes = await leerCarlos();
+
+    await request(app).post('/api/auth/login').send({ usuario: 'carlos', contrasena: 'incorrecta' }).expect(401);
+    expect((await leerCarlos()).ultimaActividad).toBe(antes.ultimaActividad);
+
+    await request(app).post('/api/auth/login').send({ usuario: 'carlos', contrasena: 'demo1234' }).expect(200);
+    const despues = await leerCarlos();
+    expect(despues.ultimaActividad).not.toBeNull();
+    expect(new Date(despues.ultimaActividad!).getTime()).toBeGreaterThan(new Date(antes.ultimaActividad!).getTime());
+  });
+
   it('rechaza credenciales incorrectas y limita intentos', async () => {
     for (let i = 0; i < 5; i++) await request(app).post('/api/auth/login').send({ usuario: 'ana', contrasena: 'mala' }).expect(401);
     const r = await request(app).post('/api/auth/login').send({ usuario: 'ana', contrasena: 'demo1234' });
