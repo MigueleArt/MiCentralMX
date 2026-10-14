@@ -239,9 +239,21 @@ describe('operaciones en línea', () => {
     const ana = await entrar('ana');
     const luis = await entrar('luis');
     await ana.patch(`/usuarios/${luis.usuarioId}`, { activo: false }).expect(200);
+    const suspendido = (await ana.get('/usuarios').expect(200)).body.find((u: { id: string }) => u.id === luis.usuarioId);
+    expect(suspendido).toMatchObject({ id: luis.usuarioId, activo: false });
     await luis.get('/configuracion').expect(401);
     await request(app).post('/api/auth/login').send({ usuario: 'luis', contrasena: 'demo1234' }).expect(403);
     await ana.patch(`/usuarios/${luis.usuarioId}`, { activo: true }).expect(200);
+    await request(app).post('/api/auth/login').send({ usuario: 'luis', contrasena: 'demo1234' }).expect(200);
+  });
+
+  it('HU-105: no permite suspender al Dueño y conserva una administración válida', async () => {
+    const ana = await entrar('ana');
+    const usuarios = (await ana.get('/usuarios').expect(200)).body as Array<{ id: string; rolNombre: string; activo: boolean }>;
+    const dueno = usuarios.find((u) => u.rolNombre === 'Dueño')!;
+
+    await ana.patch(`/usuarios/${dueno.id}`, { activo: false }).expect(409);
+    expect((await ana.get('/usuarios').expect(200)).body.find((u: { id: string }) => u.id === dueno.id)).toMatchObject({ activo: true });
   });
 
   it('reportes e historial responden con datos del negocio', async () => {

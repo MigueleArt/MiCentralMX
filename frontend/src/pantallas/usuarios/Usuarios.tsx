@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check, CircleAlert, Pencil, UserPlus, X } from 'lucide-react';
+import { Check, CircleAlert, Pencil, UserCheck, UserPlus, UserX, X } from 'lucide-react';
 import { useState } from 'react';
 import { api, mensajeError } from '../../api/cliente';
 import { errorNuevaContrasena } from '../../auth/validarContrasena';
@@ -7,7 +7,7 @@ import { useSesionActiva } from '../../auth/SesionContext';
 import { useAvisos } from '../../componentes/Avisos';
 import { AvisoLinea, ErrorConsulta, Esqueleto } from '../../componentes/Estados';
 import { Campo, Entrada } from '../../componentes/Formulario';
-import { HojaInferior } from '../../componentes/Superpuestos';
+import { Dialogo, HojaInferior } from '../../componentes/Superpuestos';
 import type { RolNegocio, UsuarioNegocio } from '@micentralmx/shared/api';
 import { PERMISOS, type Permiso } from '@micentralmx/shared/permisos';
 import { crearUsuario, editarRol, editarUsuario } from '../../dominio/enLinea';
@@ -61,6 +61,7 @@ function FormUsuario({ usuario, roles, alCerrar }: { usuario: UsuarioNegocio | n
   const [rolId, setRolId] = useState(usuario?.rolId ?? roles.find((r) => r.base === 'trabajador')?.id ?? '');
   const [contrasena, setContrasena] = useState('');
   const [confirmacion, setConfirmacion] = useState('');
+  const [confirmarEstado, setConfirmarEstado] = useState<boolean | null>(null);
   const esDueno = roles.find((r) => r.id === usuario?.rolId)?.base === 'dueno';
   const m = useMutation({
     mutationFn: (extra: { activo?: boolean } = {}) => {
@@ -106,11 +107,33 @@ function FormUsuario({ usuario, roles, alCerrar }: { usuario: UsuarioNegocio | n
         {usuario ? 'Guardar cambios' : 'Agregar usuario'}
       </button>
       {usuario && !esDueno && usuario.id !== sesion.usuario.id && (
-        <button type="button" className={`btn ${usuario.activo ? 'btn-g' : 'btn-s'}`} style={usuario.activo ? { color: 'var(--error-texto)' } : undefined} disabled={m.isPending} onClick={() => m.mutate({ activo: !usuario.activo })}>
+        <button type="button" className={`btn ${usuario.activo ? 'btn-g' : 'btn-s'}`} style={usuario.activo ? { color: 'var(--error-texto)' } : undefined} disabled={m.isPending} onClick={() => setConfirmarEstado(!usuario.activo)}>
           {usuario.activo ? 'Suspender usuario' : 'Reactivar usuario'}
         </button>
       )}
       {usuario?.activo && !esDueno && <p className="hint">Lo que registre sin conexión después de suspenderlo quedará en revisión.</p>}
+      {usuario && confirmarEstado !== null && (
+        <Dialogo
+          titulo={confirmarEstado ? `¿Reactivar a ${usuario.nombre}?` : `¿Suspender a ${usuario.nombre}?`}
+          icono={confirmarEstado ? <UserCheck className="ic" /> : <UserX className="ic" />}
+          tono={confirmarEstado ? 'neutro' : 'peligro'}
+          alCerrar={() => setConfirmarEstado(null)}
+          acciones={
+            <>
+              <button type="button" className={`btn ${confirmarEstado ? 'btn-p' : 'btn-g'}`} disabled={m.isPending} onClick={() => m.mutate({ activo: confirmarEstado })}>
+                {confirmarEstado ? 'Sí, reactivar' : 'Sí, suspender'}
+              </button>
+              <button type="button" className="btn btn-q" disabled={m.isPending} onClick={() => setConfirmarEstado(null)}>Cancelar</button>
+            </>
+          }
+        >
+          <p className="t-2">
+            {confirmarEstado
+              ? 'La cuenta recuperará el acceso con sus credenciales actuales.'
+              : 'La cuenta perderá el acceso, pero sus operaciones y su historial se conservarán.'}
+          </p>
+        </Dialogo>
+      )}
     </HojaInferior>
   );
 }
