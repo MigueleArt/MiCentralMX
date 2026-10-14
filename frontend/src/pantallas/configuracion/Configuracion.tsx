@@ -161,7 +161,11 @@ export default function Configuracion() {
             <dl className="card" style={{ padding: '4px 16px' }}>
               <div className="kv">
                 <dt>Estado</dt>
-                <dd><EstadoSync /></dd>
+                <dd><EstadoSync largo /></dd>
+              </div>
+              <div className="kv">
+                <dt>Cambios pendientes</dt>
+                <dd className="num">{r.pendientes}</dd>
               </div>
               <div className="kv">
                 <dt>Última sincronización</dt>
