@@ -1,4 +1,4 @@
-import { Ellipsis, Package, PackageMinus, PackagePlus, Pencil, ShoppingCart } from 'lucide-react';
+import { DollarSign, Ellipsis, Package, PackageMinus, PackagePlus, Pencil, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useSesionActiva } from '../../auth/SesionContext';
@@ -48,6 +48,12 @@ export default function Inventario() {
 
   const acciones = (
     <>
+      {puede('catalogo.editar_precios') && (
+        <Link className="btn btn-s" to="/inventario/precios">
+          <DollarSign className="ic" />
+          Precios de hoy
+        </Link>
+      )}
       {puede('inventario.merma') && (
         <Link className="btn btn-q" to="/inventario/mermas">
           <PackageMinus className="ic" />

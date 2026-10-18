@@ -171,6 +171,7 @@ const esquemaProveedor = z.object({
   nombre: z.string().trim().min(1, 'Escribe el nombre del proveedor.').max(160),
   telefono: z.string().trim().max(30).nullable(),
   productos: z.string().trim().max(300).default(''),
+  tipo: z.enum(['tercero', 'rancho_propio']).default('tercero'),
 });
 
 rutasCatalogo.post(
@@ -178,8 +179,8 @@ rutasCatalogo.post(
   rutaNegocio('proveedores.gestionar', async ({ tx, usuario, req }) => {
     const d = esquemaProveedor.parse(req.body);
     const id = uuid();
-    await tx.insert(proveedores).values({ id, negocioId: usuario.negocioId, nombre: d.nombre, telefono: d.telefono || null, productos: d.productos });
-    await registrarAuditoria(tx, usuario, 'compras', `${usuario.nombre} agregó al proveedor ${d.nombre}`, { tabla: 'proveedores', registroId: id });
+    await tx.insert(proveedores).values({ id, negocioId: usuario.negocioId, nombre: d.nombre, telefono: d.telefono || null, productos: d.productos, tipo: d.tipo });
+    await registrarAuditoria(tx, usuario, 'compras', `${usuario.nombre} agregó al proveedor o rancho ${d.nombre}`, { tabla: 'proveedores', registroId: id });
     return mapa.proveedor((await tx.select().from(proveedores).where(eq(proveedores.id, id)))[0]);
   }),
 );
@@ -191,8 +192,48 @@ rutasCatalogo.patch(
     const id = String(req.params.id);
     const [p] = await tx.select().from(proveedores).where(eq(proveedores.id, id));
     if (!p) throw noEncontrado('El proveedor no existe.');
-    await tx.update(proveedores).set({ nombre: d.nombre, telefono: d.telefono || null, productos: d.productos }).where(eq(proveedores.id, id));
-    await registrarAuditoria(tx, usuario, 'compras', `${usuario.nombre} editó al proveedor ${d.nombre}`, { tabla: 'proveedores', registroId: id, antes: mapa.proveedor(p), despues: d });
+    await tx.update(proveedores).set({ nombre: d.nombre, telefono: d.telefono || null, productos: d.productos, tipo: d.tipo }).where(eq(proveedores.id, id));
+    await registrarAuditoria(tx, usuario, 'compras', `${usuario.nombre} editó al proveedor o rancho ${d.nombre}`, { tabla: 'proveedores', registroId: id, antes: mapa.proveedor(p), despues: d });
     return mapa.proveedor((await tx.select().from(proveedores).where(eq(proveedores.id, id)))[0]);
+  }),
+);
+
+rutasCatalogo.patch(
+  '/catalogo/precios',
+  rutaNegocio('catalogo.editar_precios', async ({ tx, usuario, req }) => {
+    const d = z
+      .object({
+        precios: z.array(z.object({ clasificacionId: z.uuid(), precio: decimal })).min(1),
+      })
+      .parse(req.body);
+    for (const item of d.precios) {
+      const [actual] = await tx.select().from(clasificaciones).where(eq(clasificaciones.id, item.clasificacionId));
+      if (actual && !D(actual.precio).eq(item.precio)) {
+        await tx.update(clasificaciones).set({ precio: aImporte(item.precio) }).where(eq(clasificaciones.id, item.clasificacionId));
+        await registrarAuditoria(tx, usuario, 'catalogo', `${usuario.nombre} cambió el precio de clasificación a ${formatoMXN(item.precio)}`, {
+          tabla: 'clasificaciones',
+          registroId: item.clasificacionId,
+          antes: { precio: actual.precio },
+          despues: { precio: aImporte(item.precio) },
+        });
+      }
+    }
+    return { ok: true };
+  }),
+);
+
+rutasCatalogo.patch(
+  '/catalogo/unidades/:id',
+  rutaNegocio('configuracion.editar', async ({ tx, usuario, req }) => {
+    const id = String(req.params.id);
+    const d = z.object({ permiteDecimales: z.boolean() }).parse(req.body);
+    const [u] = await tx.select().from(unidades).where(eq(unidades.id, id));
+    if (!u) throw noEncontrado('La unidad no existe.');
+    await tx.update(unidades).set({ permiteDecimales: d.permiteDecimales }).where(eq(unidades.id, id));
+    await registrarAuditoria(tx, usuario, 'configuracion', `${usuario.nombre} cambió decimales de unidad ${u.nombre} a ${d.permiteDecimales}`, {
+      tabla: 'unidades',
+      registroId: id,
+    });
+    return mapa.unidad((await tx.select().from(unidades).where(eq(unidades.id, id)))[0]);
   }),
 );

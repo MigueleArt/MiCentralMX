@@ -3,6 +3,7 @@ import express, { Router } from 'express';
 import { rutasAuth } from './auth/rutas';
 import { manejarErrores, noEncontrado } from './http/errores';
 import { rutasAlertas } from './modulos/alertas';
+import { rutasCargas } from './modulos/cargas';
 import { rutasCatalogo } from './modulos/catalogo';
 import { rutasConsultas } from './modulos/consultas';
 import { rutasDispositivos } from './modulos/dispositivos';
@@ -31,7 +32,7 @@ export function crearApp() {
   });
   api.use('/auth', rutasAuth);
   api.use('/plataforma', rutasPlataforma);
-  api.use(rutasDispositivos, rutasSync, rutasCatalogo, rutasVentas, rutasUsuarios, rutasConsultas, rutasRevisiones, rutasAlertas);
+  api.use(rutasDispositivos, rutasSync, rutasCatalogo, rutasCargas, rutasVentas, rutasUsuarios, rutasConsultas, rutasRevisiones, rutasAlertas);
   api.use((req, _res, next) => next(noEncontrado(`Ruta no disponible: ${req.method} ${req.path}`)));
 
   app.use('/api', api);

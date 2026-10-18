@@ -18,26 +18,35 @@ export default function FormProveedor() {
   const avisar = useAvisos();
   const { enLinea } = useConectividad();
   const existente = useLiveQuery(async () => (id ? ((await db.proveedores.get(id)) ?? null) : null), [id]);
-  const [v, setV] = useState<{ nombre: string; telefono: string; productos: string } | null>(id ? null : { nombre: '', telefono: '', productos: '' });
+  const [v, setV] = useState<{ nombre: string; telefono: string; productos: string; tipo: 'tercero' | 'rancho_propio' } | null>(
+    id ? null : { nombre: '', telefono: '', productos: '', tipo: 'tercero' },
+  );
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
-  if (id && existente && !v) setV({ nombre: existente.nombre, telefono: existente.telefono ?? '', productos: existente.productos });
-  if (!v) return <EncabezadoSecundario titulo="Editar proveedor" cerrar volverA="/proveedores" />;
+  if (id && existente && !v) {
+    setV({
+      nombre: existente.nombre,
+      telefono: existente.telefono ?? '',
+      productos: existente.productos,
+      tipo: existente.tipo ?? 'tercero',
+    });
+  }
+  if (!v) return <EncabezadoSecundario titulo="Editar origen" cerrar volverA="/proveedores" />;
 
   const guardar = async (e: FormEvent) => {
     e.preventDefault();
     if (!v.nombre.trim()) {
-      setError('Escribe el nombre del proveedor.');
+      setError('Escribe el nombre del proveedor o rancho.');
       return;
     }
     setGuardando(true);
     setError(null);
-    const datos = { nombre: v.nombre.trim(), telefono: v.telefono.trim() || null, productos: v.productos.trim() };
+    const datos = { nombre: v.nombre.trim(), telefono: v.telefono.trim() || null, productos: v.productos.trim(), tipo: v.tipo };
     try {
       if (id) await editarProveedor(id, datos);
       else await crearProveedor(datos);
-      avisar(id ? 'Proveedor actualizado' : 'Proveedor agregado');
+      avisar(id ? 'Origen actualizado' : 'Origen agregado');
       navegar('/proveedores', { replace: true });
     } catch (err) {
       setError(mensajeError(err));
@@ -48,16 +57,40 @@ export default function FormProveedor() {
 
   return (
     <>
-      <EncabezadoSecundario titulo={id ? 'Editar proveedor' : 'Agregar proveedor'} cerrar volverA="/proveedores" />
+      <EncabezadoSecundario titulo={id ? 'Editar proveedor o rancho' : 'Agregar proveedor o rancho'} cerrar volverA="/proveedores" />
       <main className="pag-main con-enc-sec">
         <form className="pila-16 contenedor-form" style={{ margin: '0 auto' }} onSubmit={(e) => void guardar(e)} noValidate>
           {!enLinea && (
             <AvisoLinea tono="warn" icono={<WifiOff className="ic" />}>
-              Agregar o editar proveedores necesita conexión.
+              Agregar o editar proveedores y ranchos necesita conexión.
             </AvisoLinea>
           )}
+          <Campo etiqueta="Tipo de origen" id="ptipo">
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 15 }}>
+                <input
+                  type="radio"
+                  name="tipo"
+                  value="tercero"
+                  checked={v.tipo === 'tercero'}
+                  onChange={() => setV({ ...v, tipo: 'tercero' })}
+                />
+                Productor externo (consigna / tercero)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 15 }}>
+                <input
+                  type="radio"
+                  name="tipo"
+                  value="rancho_propio"
+                  checked={v.tipo === 'rancho_propio'}
+                  onChange={() => setV({ ...v, tipo: 'rancho_propio' })}
+                />
+                Rancho propio
+              </label>
+            </div>
+          </Campo>
           <Campo etiqueta="Nombre" id="pn">
-            <Entrada id="pn" value={v.nombre} onChange={(e) => setV({ ...v, nombre: e.target.value })} placeholder="Ej. Agrícola San Juan" />
+            <Entrada id="pn" value={v.nombre} onChange={(e) => setV({ ...v, nombre: e.target.value })} placeholder="Ej. Rancho La Joya o Don Ale" />
           </Campo>
           <Campo etiqueta="Teléfono" id="pt" opcional>
             <Entrada id="pt" type="tel" value={v.telefono} onChange={(e) => setV({ ...v, telefono: e.target.value })} />
@@ -68,7 +101,7 @@ export default function FormProveedor() {
           {error && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{error}</AvisoLinea>}
           <button type="submit" className="btn btn-p btn-lg" disabled={!enLinea || guardando}>
             {guardando && <LoaderCircle className="ic girar" />}
-            {id ? 'Guardar cambios' : 'Guardar proveedor'}
+            {id ? 'Guardar cambios' : 'Guardar origen'}
           </button>
         </form>
       </main>

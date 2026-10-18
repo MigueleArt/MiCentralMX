@@ -45,6 +45,12 @@ export default function VentaRegistrada() {
                 <dt>Clasificación</dt>
                 <dd>{r.clasificacionNombre}</dd>
               </div>
+              {r.origenNombre && (
+                <div className="kv" style={{ borderBottom: 0, padding: '2px 0' }}>
+                  <dt>Origen</dt>
+                  <dd style={{ color: 'var(--primario)', fontWeight: 500 }}>{r.origenNombre}</dd>
+                </div>
+              )}
               <div className="kv" style={{ borderBottom: 0, paddingTop: 4 }}>
                 <dt>Cantidad</dt>
                 <dd className="num">

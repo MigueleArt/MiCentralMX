@@ -20,7 +20,7 @@ export const UNIDADES_INICIALES: Array<[string, string, boolean]> = [
   ['pieza', 'piezas', false],
   ['costal', 'costales', false],
   ['arpilla', 'arpillas', false],
-  ['tara', 'taras', false],
+  ['tara', 'taras', true],
   ['libra', 'libras', true],
 ];
 

@@ -180,6 +180,11 @@ function Detalle({ v }: { v: VentaVista }) {
                       {r.clasificacionNombre} · {cantidadConUnidad(r.cantidad, { nombre: r.unidadNombre, plural: r.unidadPlural })} × {formatoMXN(r.precio)}
                       {!D(r.precio).eq(r.precioReferencia) && ` (catálogo ${formatoMXN(r.precioReferencia)})`}
                     </p>
+                    {r.origenNombre && (
+                      <p className="t-aux" style={{ color: 'var(--primario)', fontWeight: 500, fontSize: 12, marginTop: 2 }}>
+                        De: {r.origenNombre}
+                      </p>
+                    )}
                   </div>
                   <p className="num" style={{ fontWeight: 700 }}>
                     {formatoMXN(r.importe)}

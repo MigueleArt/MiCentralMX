@@ -14,13 +14,13 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { v7 as uuid } from 'uuid';
 import type { z } from 'zod';
 import type { Tx } from '../../db/pool';
-import { clasificaciones, clientes, compraRenglones, compras, movimientosDinero, pagoAplicaciones, pagos, productos, proveedores, unidades, ventaRenglones, ventas } from '../../db/esquema';
+import { cargaRenglones, cargas, clasificaciones, clientes, compraRenglones, compras, movimientosDinero, pagoAplicaciones, pagos, productos, proveedores, unidades, ventaRenglones, ventas } from '../../db/esquema';
 import type { UsuarioActual } from '../../http/ruta';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { aCantidad, aImporte, D, folioCompra, folioVenta, formatoMXN, sumar } from '../../lib/dinero';
 import { moverExistencia } from '../../lib/inventario';
 import { folioDelDispositivo, folioSuelto } from '../dispositivos';
-import { CATEGORIAS, esquemaCliente, esquemaCompra, esquemaMerma, esquemaMovimientoDinero, esquemaPago, esquemaVenta } from './esquemas';
+import { CATEGORIAS, esquemaCarga, esquemaCliente, esquemaCompra, esquemaMerma, esquemaMovimientoDinero, esquemaPago, esquemaVenta } from './esquemas';
 
 export interface Resultado {
   estado: 'aplicada' | 'en_revision' | 'rechazada';
@@ -126,6 +126,7 @@ async function aplicarVenta(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Pr
       precio: aImporte(r.precio),
       precioReferencia: aImporte(r.precioReferencia),
       importe: aImporte(D(r.precio).times(r.cantidad)),
+      cargaId: r.cargaId ?? null,
     };
   });
   const total = sumar(renglones.map((r) => r.importe));
@@ -141,6 +142,7 @@ async function aplicarVenta(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Pr
       delta: D(r.cantidad).neg().toString(),
       tipo: 'venta',
       referencia: `Venta ${folioVenta(folio)}`,
+      cargaId: r.cargaId,
       usuarioId: autor.id,
       usuarioNombre: autor.nombre,
       creadoEn: ctx.creadoEnDispositivo,
@@ -408,6 +410,80 @@ async function aplicarMovimientoDinero(tx: Tx, datos: unknown, ctx: ContextoApli
   return resultado(`${concepto} · ${tipo === 'ingreso' ? '+' : '−'}${formatoMXN(m.monto)}`, revision);
 }
 
+// ── Carga del día ────────────────────────────────────────────────────────────
+
+async function aplicarCarga(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Promise<Resultado> {
+  const { autor } = ctx;
+  exigirPermiso(autor, 'cargas.registrar', 'registrar cargas del día');
+  const c = parsear(esquemaCarga, datos);
+  const revision = [...ctx.revisionGeneral];
+  const [prov] = await tx
+    .select({ id: proveedores.id, nombre: proveedores.nombre, tipo: proveedores.tipo })
+    .from(proveedores)
+    .where(eq(proveedores.id, c.proveedorId));
+  if (!prov) throw new Dependencia('El proveedor o rancho de la carga no existe en el servidor.');
+
+  const cat = await catalogoDe(tx, c.renglones.map((r) => r.clasificacionId));
+  const renglones = c.renglones.map((r, linea) => {
+    const f = cat.get(r.clasificacionId);
+    if (!f) throw new Rechazo('Un producto de la carga no existe.');
+    validarCantidad(r.cantidad, f.u.permiteDecimales);
+    return {
+      linea,
+      clasificacionId: f.c.id,
+      cantidad: aCantidad(r.cantidad),
+      productoId: f.p.id,
+      productoNombre: f.p.nombre,
+      clasificacionNombre: f.c.nombre,
+    };
+  });
+
+  await tx.insert(cargas).values({
+    id: c.id,
+    negocioId: autor.negocioId,
+    fecha: c.fecha,
+    proveedorId: c.proveedorId,
+    estado: 'abierta',
+    usuarioId: autor.id,
+    usuarioNombre: autor.nombre,
+    dispositivoId: ctx.dispositivoId,
+    creadoEnDispositivo: ctx.creadoEnDispositivo,
+  });
+
+  await tx.insert(cargaRenglones).values(
+    renglones.map((r) => ({
+      cargaId: c.id,
+      linea: r.linea,
+      negocioId: autor.negocioId,
+      clasificacionId: r.clasificacionId,
+      cantidad: r.cantidad,
+    })),
+  );
+
+  for (const r of renglones) {
+    await moverExistencia(tx, {
+      negocioId: autor.negocioId,
+      clasificacionId: r.clasificacionId,
+      productoId: r.productoId,
+      delta: r.cantidad,
+      tipo: 'carga',
+      referencia: `Carga ${c.fecha} · ${prov.nombre}`,
+      cargaId: c.id,
+      usuarioId: autor.id,
+      usuarioNombre: autor.nombre,
+      creadoEn: ctx.creadoEnDispositivo,
+    });
+  }
+
+  await registrarAuditoria(tx, autor, 'inventario', `${autor.nombre} registró la carga de ${prov.nombre} del ${c.fecha}`, {
+    tabla: 'cargas',
+    registroId: c.id,
+    fecha: ctx.creadoEnDispositivo,
+  });
+
+  return resultado(`Carga ${c.fecha} · ${prov.nombre}`, revision);
+}
+
 const APLICADORES: Record<string, (tx: Tx, datos: unknown, ctx: ContextoAplicacion) => Promise<Resultado>> = {
   'venta.crear': aplicarVenta,
   'pago.crear': aplicarPago,
@@ -415,6 +491,8 @@ const APLICADORES: Record<string, (tx: Tx, datos: unknown, ctx: ContextoAplicaci
   'merma.crear': aplicarMerma,
   'cliente.crear': aplicarCliente,
   'movimiento_dinero.crear': aplicarMovimientoDinero,
+  carga: aplicarCarga,
+  'carga.crear': aplicarCarga,
 };
 
 /** Resumen legible aunque la operación no se haya aplicado. */
@@ -427,6 +505,8 @@ export function resumenCrudo(tipo: string, datos: unknown): string {
     'merma.crear': 'Merma',
     'cliente.crear': 'Cliente nuevo',
     'movimiento_dinero.crear': 'Movimiento de dinero',
+    carga: 'Carga',
+    'carga.crear': 'Carga',
   };
   const folio = typeof d.folio === 'number' ? ` ${tipo === 'compra.crear' ? folioCompra(d.folio) : folioVenta(d.folio)}` : '';
   const quien = (d.clienteNombre ?? d.nombre ?? d.proveedorNombre) as string | undefined;

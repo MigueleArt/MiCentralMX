@@ -15,9 +15,10 @@ export async function moverExistencia(
     clasificacionId: string;
     productoId: string;
     delta: string;
-    tipo: 'inicial' | 'compra' | 'venta' | 'merma' | 'ajuste' | 'cancelacion';
+    tipo: 'inicial' | 'compra' | 'venta' | 'merma' | 'ajuste' | 'cancelacion' | 'carga' | 'devolucion';
     referencia?: string | null;
     motivo?: string | null;
+    cargaId?: string | null;
     usuarioId: string | null;
     usuarioNombre: string;
     creadoEn: Date;
@@ -33,10 +34,18 @@ export async function moverExistencia(
     tipo: m.tipo,
     referencia: m.referencia ?? null,
     motivo: m.motivo ?? null,
+    cargaId: m.cargaId ?? null,
     usuarioId: m.usuarioId,
     usuarioNombre: m.usuarioNombre,
     creadoEn: m.creadoEn,
   });
+  if (m.cargaId) {
+    await tx.execute(sql`
+      insert into existencias_carga (carga_id, clasificacion_id, negocio_id, cantidad)
+      values (${m.cargaId}, ${m.clasificacionId}, ${m.negocioId}, ${m.delta})
+      on conflict (carga_id, clasificacion_id) do update set cantidad = existencias_carga.cantidad + excluded.cantidad
+    `);
+  }
   const { rows } = await tx.execute<{ cantidad: string }>(sql`
     insert into existencias (clasificacion_id, negocio_id, cantidad)
     values (${m.clasificacionId}, ${m.negocioId}, ${m.delta})

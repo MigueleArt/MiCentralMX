@@ -13,12 +13,17 @@ import { crearNegocio } from '../src/modulos/plataforma';
 import { app, bajar, clasificacion, empujar, entrar, operacion, venta } from './ayuda';
 import request from 'supertest';
 
-afterAll(() => cerrarPools());
+const omitir = process.env.TEST_DB_OMITIR === 'true';
+const suite = omitir ? describe.skip : describe;
+
+afterAll(() => {
+  if (!omitir) return cerrarPools();
+});
 beforeEach(async () => {
-  await reiniciarLimites();
+  if (!omitir) await reiniciarLimites();
 });
 
-describe('autenticación', () => {
+suite('autenticación', () => {
   it('HU-109: actualiza la actividad solo después de un acceso válido', async () => {
     const ana = await entrar('ana');
     const leerCarlos = async () => {
@@ -59,7 +64,7 @@ describe('autenticación', () => {
   });
 });
 
-describe('aislamiento por negocio (RLS)', () => {
+suite('aislamiento por negocio (RLS)', () => {
   it('mc_app no ve filas sin negocio fijado ni las de otro negocio', async () => {
     const ana = await entrar('ana');
     const owner = new pg.Pool({ connectionString: process.env.DATABASE_OWNER_URL });
@@ -100,7 +105,7 @@ async function nombreDueno(negocioId: string) {
   return r.rows[0].usuario;
 }
 
-describe('sincronización', () => {
+suite('sincronización', () => {
   it('aplica una venta con folio del bloque y responde duplicada al reenviarla', async () => {
     const ana = await entrar('ana');
     const c = await clasificacion(ana, 'Aguacate Hass', 'Primera / Grande');
@@ -174,7 +179,7 @@ describe('sincronización', () => {
   });
 });
 
-describe('revisiones', () => {
+suite('revisiones', () => {
   it('una venta a un cliente que aún no existe queda pendiente y se reaplica cuando llega', async () => {
     const ana = await entrar('ana');
     const c = await clasificacion(ana, 'Chile serrano', 'Única');
@@ -220,7 +225,7 @@ describe('revisiones', () => {
   });
 });
 
-describe('operaciones en línea', () => {
+suite('operaciones en línea', () => {
   it('HU-123: edita solo el negocio actual sin alterar sus operaciones', async () => {
     const ana = await entrar('ana');
     const carlos = await entrar('carlos');

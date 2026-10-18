@@ -137,6 +137,8 @@ async function aplicarCambios(r: RespuestaPull) {
       db.existencias,
       db.clientes,
       db.proveedores,
+      db.cargas,
+      db.existenciasCarga,
       db.ventas,
       db.pagos,
       db.compras,
@@ -149,6 +151,8 @@ async function aplicarCambios(r: RespuestaPull) {
       await db.clasificaciones.bulkPut(c.clasificaciones);
       await db.existencias.bulkPut(c.existencias);
       await db.proveedores.bulkPut(c.proveedores);
+      if (c.cargas?.length) await db.cargas.bulkPut(c.cargas.map((x) => ({ ...x, operacionId: null })));
+      if (c.existenciasCarga?.length) await db.existenciasCarga.bulkPut(c.existenciasCarga);
       // Las versiones del servidor reemplazan a las locales (ya sincronizadas) con el mismo id.
       await db.clientes.bulkPut(c.clientes.map((x) => ({ ...x, operacionId: null })));
       await db.ventas.bulkPut(c.ventas.map((x) => ({ ...x, operacionId: null })));

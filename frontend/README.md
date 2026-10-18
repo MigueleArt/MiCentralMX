@@ -60,19 +60,23 @@ La numeración es la del prototipo UI/UX con el que se diseñó la app (36 panta
 | 19 | Mermas / Ajustes | `pantallas/inventario/MermasAjustes.tsx` |
 | 20 | Clientes | `pantallas/clientes/Clientes.tsx` |
 | 21 | Detalle de cliente | `pantallas/clientes/DetalleCliente.tsx` (+ `FormCliente.tsx`) |
-| 22 | Proveedores | `pantallas/proveedores/Proveedores.tsx` (+ `FormProveedor.tsx`) |
+| 22 | Proveedores y ranchos | `pantallas/proveedores/Proveedores.tsx` (+ `FormProveedor.tsx`) |
 | 23 | Compras | `pantallas/compras/Compras.tsx` |
 | 24 | Crear compra | `pantallas/compras/NuevaCompra.tsx` |
 | 25 | Pagos | `pantallas/pagos/Pagos.tsx` (+ `RegistrarMovimiento.tsx`) |
 | 26 | Reportes | `pantallas/reportes/Reportes.tsx` |
 | 27 | Usuarios | `pantallas/usuarios/Usuarios.tsx` |
 | 28 | Historial | `pantallas/historial/Historial.tsx` |
-| 29 | Configuración | `pantallas/configuracion/Configuracion.tsx` |
+| 29 | Configuración | `pantallas/configuracion/Configuracion.tsx` (incluye activación de decimales por unidad) |
 | 30, 31 | Estado vacío, Sin resultados | `EstadoVacio` en `componentes/Estados.tsx` |
 | 32 | Error de validación | Estado de `NuevaVenta.tsx` |
 | 33 | Error al guardar | Diálogo de `NuevaVenta.tsx` (solo ante falla de IndexedDB, nunca por falta de red) |
 | 34 | Cargando | `Esqueleto` en `componentes/Estados.tsx` |
 | — | Revisiones (agregada después del prototipo) | `pantallas/revisiones/Revisiones.tsx`: aprobar, reaplicar o descartar operaciones que llegaron con observaciones |
+| — | Carga del día | `pantallas/carga/Carga.tsx`: totales Cargado / Vendido / Queda por clasificación y origen, listado de cargas |
+| — | Nueva carga | `pantallas/carga/NuevaCarga.tsx`: registro rápido de carga del día con alta rápida de productor/rancho |
+| — | Detalle de carga | `pantallas/carga/DetalleCarga.tsx`: balance de la carga, ventas asociadas y cierre con resolución de sobrantes |
+| — | Precios de hoy | `pantallas/inventario/PreciosHoy.tsx`: edición masiva de precios del catálogo en línea |
 
 ## Backend
 

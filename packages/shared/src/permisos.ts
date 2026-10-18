@@ -24,6 +24,8 @@ export const PERMISOS = {
   'historial.ver': 'Ver historial',
   'usuarios.gestionar': 'Administrar usuarios',
   'revisiones.resolver': 'Resolver operaciones en revisión',
+  'cargas.registrar': 'Registrar cargas del día',
+  'cargas.cerrar': 'Cerrar cargas',
   'configuracion.editar': 'Cambiar la configuración del negocio',
 } as const;
 

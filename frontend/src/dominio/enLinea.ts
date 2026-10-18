@@ -34,9 +34,15 @@ export interface DatosClienteEdicion {
 }
 export const editarCliente = (id: string, d: DatosClienteEdicion) => yRefrescar(api<void>('PATCH', `/clientes/${id}`, d));
 
-export type DatosProveedor = Pick<Proveedor, 'nombre' | 'telefono' | 'productos'>;
+export type DatosProveedor = Pick<Proveedor, 'nombre' | 'telefono' | 'productos'> & { tipo?: 'tercero' | 'rancho_propio' };
 export const crearProveedor = (d: DatosProveedor) => yRefrescar(api<Proveedor>('POST', '/proveedores', d));
 export const editarProveedor = (id: string, d: DatosProveedor) => yRefrescar(api<Proveedor>('PATCH', `/proveedores/${id}`, d));
+
+export const editarPrecios = (precios: Array<{ clasificacionId: string; precio: string }>) =>
+  yRefrescar(api<{ actualizados: number }>('PATCH', '/catalogo/precios', { precios }));
+
+export const cambiarPermiteDecimalesUnidad = (id: string, permiteDecimales: boolean) =>
+  yRefrescar(api<any>('PATCH', `/catalogo/unidades/${id}`, { permiteDecimales }));
 
 export interface DatosUsuario {
   nombre: string;

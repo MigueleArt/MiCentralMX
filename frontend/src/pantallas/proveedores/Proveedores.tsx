@@ -30,16 +30,16 @@ export default function Proveedores() {
   const lista = (datos ?? []).filter((x) => coincide(`${x.p.nombre} ${x.p.productos}`, q));
   return (
     <>
-      <EncabezadoSecundario titulo="Proveedores" volverA="/mas" />
+      <EncabezadoSecundario titulo="Proveedores y ranchos" volverA="/mas" />
       <main className="pag-main con-enc-sec con-barra">
         <div className="pila-16 contenedor-form" style={{ margin: '0 auto' }}>
-          <Buscador valor={q} alCambiar={setQ} etiqueta="Buscar proveedor" marcador="Buscar proveedor" />
+          <Buscador valor={q} alCambiar={setQ} etiqueta="Buscar proveedor o rancho" marcador="Buscar proveedor o rancho" />
           {!datos ? (
             <Esqueleto />
           ) : datos.length === 0 ? (
-            <EstadoVacio icono={Truck} titulo="Aún no hay proveedores" texto="Agrega a quienes te surten mercancía para registrar compras." />
+            <EstadoVacio icono={Truck} titulo="Aún no hay proveedores o ranchos" texto="Agrega a quienes te surten mercancía o tus ranchos propios." />
           ) : lista.length === 0 ? (
-            <EstadoVacio titulo="Sin resultados" texto={`No hay proveedores que coincidan con “${q}”.`} />
+            <EstadoVacio titulo="Sin resultados" texto={`No hay registros que coincidan con “${q}”.`} />
           ) : (
             <div className="card" style={{ overflow: 'hidden' }}>
               {lista.map(({ p, ultima }) => {
@@ -49,7 +49,20 @@ export default function Proveedores() {
                       <Truck className="ic" />
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontWeight: 600 }}>{p.nombre}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <p style={{ fontWeight: 600 }}>{p.nombre}</p>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                            background: p.tipo === 'rancho_propio' ? 'var(--primario-fondo)' : 'var(--fondo-control)',
+                            color: p.tipo === 'rancho_propio' ? 'var(--primario)' : 'var(--texto-tenue)',
+                          }}
+                        >
+                          {p.tipo === 'rancho_propio' ? 'Rancho' : 'Tercero'}
+                        </span>
+                      </div>
                       <p className="t-aux">{p.productos || 'Sin productos registrados'}</p>
                     </div>
                     <div style={{ textAlign: 'right' }}>
