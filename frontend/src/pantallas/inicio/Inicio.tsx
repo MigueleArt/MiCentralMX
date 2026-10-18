@@ -92,6 +92,7 @@ export default function Inicio() {
   const nombre = sesion.usuario.nombre.split(' ')[0];
   const accesos = ACCESOS.filter((a) => puede(a.permiso));
   const ancho = formato !== 'telefono';
+  const cargaDelDia = useTotalesCargaDelDia();
 
   if (!r) {
     return (
@@ -249,8 +250,6 @@ export default function Inicio() {
       </div>
     </section>
   );
-
-  const cargaDelDia = useTotalesCargaDelDia();
 
   if (!ancho) {
     return (
