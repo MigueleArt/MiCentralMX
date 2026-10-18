@@ -644,10 +644,17 @@ ruta('PATCH', '/configuracion', async ({ cuerpo, usuario }) => {
   if (!(horas >= 1 && horas <= 72)) return error(422, 'La ventana sin conexión debe estar entre 1 y 72 horas.');
   if (!(plazo >= 1 && plazo <= 120)) return error(422, 'El plazo de crédito debe estar entre 1 y 120 días.');
   const negocio = (await valor<Negocio>('negocio'))!;
-  await fijarValor('negocio', { ...negocio, nombre: cuerpo.nombre ?? negocio.nombre, ubicacion: cuerpo.ubicacion ?? negocio.ubicacion });
-  await fijarValor('configuracion', { ventanaOfflineHoras: horas, plazoCreditoDias: plazo });
+  const actualizado = {
+    ...negocio,
+    nombre: cuerpo.nombre ?? negocio.nombre,
+    telefono: cuerpo.telefono || null,
+    ubicacion: cuerpo.ubicacion || null,
+  };
+  const configuracion = { ventanaOfflineHoras: horas, plazoCreditoDias: plazo };
+  await fijarValor('negocio', actualizado);
+  await fijarValor('configuracion', configuracion);
   await auditar(usuario.nombre, 'configuracion', `${usuario.nombre} cambió la configuración del negocio`);
-  return ok();
+  return ok({ ...actualizado, ...configuracion });
 });
 ruta('GET', '/reportes/resumen', async ({ query, usuario }) => {
   const e = exigir(usuario, await permisos(usuario), 'reportes.ver');

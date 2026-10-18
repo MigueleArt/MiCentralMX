@@ -5,7 +5,8 @@
  */
 import { api } from '../api/cliente';
 import type { DatosProducto, RolNegocio, SolicitudAjuste, UsuarioNegocio } from '@micentralmx/shared/api';
-import type { ConfiguracionNegocio, Producto, Proveedor } from '@micentralmx/shared/entidades';
+import type { ConfiguracionNegocio, Negocio, Producto, Proveedor } from '@micentralmx/shared/entidades';
+import { db } from '../db/db';
 import { sincronizar } from '../sync/motor';
 
 async function yRefrescar<T>(p: Promise<T>): Promise<T> {
@@ -48,7 +49,16 @@ export const crearUsuario = (d: DatosUsuario) => api<UsuarioNegocio>('POST', '/u
 export const editarUsuario = (id: string, d: Partial<DatosUsuario>) => api<UsuarioNegocio>('PATCH', `/usuarios/${id}`, d);
 export const editarRol = (id: string, permisos: string[]) => api<RolNegocio>('PUT', `/roles/${id}`, { permisos });
 
-export const guardarConfiguracion = (d: ConfiguracionNegocio & { nombre: string; ubicacion: string | null }) =>
-  yRefrescar(api<void>('PATCH', '/configuracion', d));
+export async function guardarConfiguracion(d: ConfiguracionNegocio & Pick<Negocio, 'nombre' | 'telefono' | 'ubicacion'>) {
+  const actualizada = await api<Negocio & ConfiguracionNegocio>('PATCH', '/configuracion', d);
+  const sesion = await db.leerMeta('sesion');
+  if (sesion) {
+    await db.guardarMeta('sesion', {
+      ...sesion,
+      negocio: { id: actualizada.id, nombre: actualizada.nombre, telefono: actualizada.telefono, ubicacion: actualizada.ubicacion },
+      configuracion: { ventanaOfflineHoras: actualizada.ventanaOfflineHoras, plazoCreditoDias: actualizada.plazoCreditoDias },
+    });
+  }
+}
 export const cambiarContrasena = (actual: string, nueva: string) =>
   api<void>('POST', '/auth/cambiar-contrasena', { actual, nueva });

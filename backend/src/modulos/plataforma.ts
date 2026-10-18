@@ -26,6 +26,7 @@ export const UNIDADES_INICIALES: Array<[string, string, boolean]> = [
 
 export interface DatosNegocioNuevo {
   nombre: string;
+  telefono?: string | null;
   ubicacion: string | null;
   dueno: { nombre: string; usuario: string; contrasena: string };
 }
@@ -35,7 +36,7 @@ export async function crearNegocio(db: Db, d: DatosNegocioNuevo) {
   const negocioId = uuid();
   const hash = await hashContrasena(d.dueno.contrasena);
   return db.transaction(async (tx) => {
-    await tx.insert(negocios).values({ id: negocioId, nombre: d.nombre, ubicacion: d.ubicacion, ventanaOfflineHoras: 24, plazoCreditoDias: 7 });
+    await tx.insert(negocios).values({ id: negocioId, nombre: d.nombre, telefono: d.telefono ?? null, ubicacion: d.ubicacion, ventanaOfflineHoras: 24, plazoCreditoDias: 7 });
     const ids = {} as Record<RolBase, string>;
     for (const base of Object.keys(ROLES_BASE) as RolBase[]) {
       ids[base] = uuid();
@@ -70,6 +71,7 @@ rutasPlataforma.post(
     const d = z
       .object({
         nombre: z.string().trim().min(1).max(120),
+        telefono: z.string().trim().max(30).nullable().default(null),
         ubicacion: z.string().trim().max(200).nullable().default(null),
         dueno: z.object({ nombre: z.string().trim().min(2).max(120), usuario: z.string().trim().min(3).max(80), contrasena: z.string().min(8).max(200) }),
       })

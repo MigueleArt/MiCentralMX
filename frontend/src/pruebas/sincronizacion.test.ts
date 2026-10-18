@@ -4,11 +4,12 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { api, fijarToken, usarTransporte } from '../api/cliente';
-import type { OperacionEnRevision } from '@micentralmx/shared/api';
-import { cerrarSesion, ErrorSesion, iniciarSesion } from '../auth/sesion';
+import type { OperacionEnRevision, UsuarioNegocio } from '@micentralmx/shared/api';
+import { cerrarSesion, ErrorSesion, iniciarSesion, restaurarSesion } from '../auth/sesion';
 import { db } from '../db/db';
 import { catalogo, clientesVista, existenciasEfectivas, ventaVista } from '../dominio/consultas';
 import { ErrorValidacion } from '../dominio/errores';
+import { guardarConfiguracion } from '../dominio/enLinea';
 import { registrarPago, registrarVenta } from '../dominio/operaciones';
 import { manejarSolicitud, reiniciarServidorDemo } from '../demo/servidor';
 import { sincronizar } from '../sync/motor';
@@ -189,6 +190,59 @@ describe('revisiones (servidor de demostración)', () => {
 });
 
 describe('sesión', () => {
+  it('HU-123: actualiza los datos del negocio en la sesión actual', async () => {
+    await entrar('ana');
+
+    await guardarConfiguracion({
+      nombre: 'Bodega Actualizada',
+      telefono: '55 9876 5432',
+      ubicacion: 'Nave II',
+      ventanaOfflineHoras: 24,
+      plazoCreditoDias: 7,
+    });
+
+    expect((await db.leerMeta('sesion'))?.negocio).toMatchObject({
+      nombre: 'Bodega Actualizada',
+      telefono: '55 9876 5432',
+      ubicacion: 'Nave II',
+    });
+  });
+
+  it('HU-006: impide entrar al usuario inactivo y vuelve a permitirlo al reactivarlo', async () => {
+    await entrar('ana');
+    const usuarios = await api<UsuarioNegocio[]>('GET', '/usuarios');
+    const luis = usuarios.find((u) => u.usuario === 'luis')!;
+    await api('PATCH', `/usuarios/${luis.id}`, { activo: false });
+    await cerrarSesion();
+
+    await expect(iniciarSesion('luis', 'demo1234')).rejects.toMatchObject({ estado: 403 });
+
+    await iniciarSesion('ana', 'demo1234');
+    await api('PATCH', `/usuarios/${luis.id}`, { activo: true });
+    await cerrarSesion();
+    await expect(iniciarSesion('luis', 'demo1234')).resolves.toMatchObject({ usuario: { id: luis.id } });
+  });
+
+  it('HU-005: cerrar sesión elimina el contexto local e invalida el acceso posterior', async () => {
+    await entrar('ana');
+
+    await cerrarSesion();
+
+    expect(await db.leerMeta('sesion')).toBeUndefined();
+    await expect(api('GET', '/configuracion')).rejects.toMatchObject({ estado: 401 });
+  });
+
+  it('elimina la sesión local cuando el servidor informa que dejó de ser válida', async () => {
+    await entrar('ana');
+    expect(await db.leerMeta('sesion')).toBeDefined();
+
+    // Invalida el refresh del servidor sin ejecutar el cierre local.
+    await api('POST', '/auth/logout', {});
+    await restaurarSesion();
+
+    expect(await db.leerMeta('sesion')).toBeUndefined();
+  });
+
   it('no permite cerrar sesión con operaciones pendientes', async () => {
     await entrar('ana');
     const segunda = await clasificacion('Jitomate Saladette', 'Segunda / Mediano');
