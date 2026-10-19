@@ -90,6 +90,7 @@ export const carga = (r: Fila<typeof e.cargas>, renglones: RenglonCarga[]): Carg
 });
 
 export const existenciaCarga = (r: Fila<typeof e.existenciasCarga>): ExistenciaCarga => ({
+  id: r.id,
   cargaId: r.cargaId,
   clasificacionId: r.clasificacionId,
   cantidad: r.cantidad,
@@ -107,6 +108,7 @@ export const renglonVenta = (r: Fila<typeof e.ventaRenglones>): RenglonVenta => 
   precioReferencia: r.precioReferencia,
   importe: r.importe,
   cargaId: r.cargaId ?? null,
+  origenNombre: r.origenNombre ?? null,
 });
 
 export const venta = (r: Fila<typeof e.ventas>, renglones: RenglonVenta[]): Venta => ({

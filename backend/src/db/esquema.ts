@@ -217,6 +217,7 @@ export const ventaRenglones = pgTable(
     precioReferencia: importe('precio_referencia').notNull(),
     importe: importe('importe').notNull(),
     cargaId: uuid('carga_id'),
+    origenNombre: text('origen_nombre'),
   },
   (t) => [primaryKey({ columns: [t.ventaId, t.linea] })],
 );
@@ -358,6 +359,7 @@ export const alertasInventario = pgTable('alertas_inventario', {
   negocioId: uuid('negocio_id').notNull(),
   clasificacionId: uuid('clasificacion_id').notNull(),
   cargaId: uuid('carga_id'),
+  tipo: text('tipo').notNull().default('descuadre'),
   existencia: cantidad('existencia').notNull(),
   sumaMovimientos: cantidad('suma_movimientos').notNull(),
   detectadaEn: ts('detectada_en').notNull(),

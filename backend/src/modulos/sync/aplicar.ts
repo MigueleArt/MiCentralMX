@@ -108,6 +108,20 @@ async function aplicarVenta(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Pr
   if (v.formaPago === 'credito' && (!v.clienteId || !v.venceEl)) throw new Rechazo('Una venta a crédito necesita cliente y fecha de vencimiento.');
 
   const cat = await catalogoDe(tx, v.renglones.map((r) => r.clasificacionId));
+  // Obtener proveedores de cargas para resolver origenNombre si falta
+  const cargaIds = [...new Set(v.renglones.map((r) => r.cargaId).filter((id): id is string => !!id))];
+  const origenesPorCarga = new Map<string, string>();
+  if (cargaIds.length > 0) {
+    const filasCargas = await tx
+      .select({ cargaId: cargas.id, provNombre: proveedores.nombre })
+      .from(cargas)
+      .innerJoin(proveedores, eq(proveedores.id, cargas.proveedorId))
+      .where(inArray(cargas.id, cargaIds));
+    for (const fc of filasCargas) {
+      origenesPorCarga.set(fc.cargaId, fc.provNombre);
+    }
+  }
+
   const renglones = v.renglones.map((r, linea) => {
     const f = cat.get(r.clasificacionId);
     if (!f) throw new Rechazo('Un producto de la venta no existe.');
@@ -127,6 +141,7 @@ async function aplicarVenta(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Pr
       precioReferencia: aImporte(r.precioReferencia),
       importe: aImporte(D(r.precio).times(r.cantidad)),
       cargaId: r.cargaId ?? null,
+      origenNombre: r.origenNombre || (r.cargaId ? origenesPorCarga.get(r.cargaId) ?? null : null),
     };
   });
   const total = sumar(renglones.map((r) => r.importe));
@@ -330,6 +345,7 @@ async function aplicarMerma(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Pr
     delta: D(m.cantidad).neg().toString(),
     tipo: 'merma',
     motivo: m.motivo,
+    cargaId: m.cargaId ?? undefined,
     usuarioId: autor.id,
     usuarioNombre: autor.nombre,
     creadoEn: ctx.creadoEnDispositivo,

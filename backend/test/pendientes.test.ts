@@ -92,6 +92,18 @@ suite('bajada paginada', () => {
 suite('conciliación nocturna', () => {
   const owner = () => new pg.Client({ connectionString: process.env.DATABASE_OWNER_URL });
 
+  beforeEach(async () => {
+    const db = owner();
+    await db.connect();
+    await db.query(`
+      update existencias e
+      set cantidad = coalesce((select sum(delta) from movimientos_inventario m where m.clasificacion_id = e.clasificacion_id), 0)
+    `);
+    await db.query('delete from existencias_carga');
+    await db.query('delete from alertas_inventario');
+    await db.end();
+  });
+
   it('detecta una existencia que no cuadra con su historial y la corrige', async () => {
     const ana = await entrar('ana');
     const limpio = await ejecutarNocturnas(process.env.DATABASE_PLATAFORMA_URL);
