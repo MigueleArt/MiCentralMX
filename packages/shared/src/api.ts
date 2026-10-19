@@ -56,6 +56,7 @@ export interface DatosMerma {
   cantidad: string;
   motivo: string;
   nota: string | null;
+  cargaId?: string | null;
 }
 
 export interface DatosOperacion {
@@ -220,6 +221,7 @@ export interface AlertaInventario {
   clasificacionId: string;
   productoId: string;
   cargaId?: string | null;
+  tipo?: string;
   descripcion: string;
   unidadPlural: string;
   existencia: string;
@@ -248,4 +250,5 @@ export interface SolicitudAjuste {
   clasificacionId: string;
   cantidadContada: string;
   motivo: string;
+  cargaId?: string | null;
 }

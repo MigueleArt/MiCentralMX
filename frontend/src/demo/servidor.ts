@@ -323,7 +323,7 @@ async function aplicarOperacion(op: OperacionPush, usuario: UsuarioServidor, rel
     case 'merma.crear': {
       if (!puede('inventario.merma')) return { estado: 'rechazada', motivo: 'El usuario no tiene permiso para registrar mermas.' };
       const m = op.datos as DatosMerma;
-      const alcanza = await moverExistencia(m.clasificacionId, m.productoId, D(m.cantidad).neg().toString(), 'merma', null, m.motivo, autor.nombre, op.creado_en_dispositivo, m.id);
+      const alcanza = await moverExistencia(m.clasificacionId, m.productoId, D(m.cantidad).neg().toString(), 'merma', null, m.motivo, autor.nombre, op.creado_en_dispositivo, m.id, m.cargaId ?? null);
       if (!alcanza) revision.push('La existencia quedó negativa.');
       await auditar(autor.nombre, 'inventario', `${autor.nombre} registró una merma de ${m.cantidad} (${m.motivo})`, op.creado_en_dispositivo);
       return revision.length ? { estado: 'en_revision', motivo: revision.join(' ') } : { estado: 'aplicada' };
@@ -557,10 +557,16 @@ ruta('POST', '/inventario/ajustes', async ({ cuerpo, usuario }) => {
   const c = await obtener<Clasificacion>('clasificaciones', d.clasificacionId);
   if (!c) return error(404, 'La clasificación no existe.');
   if (!(D(d.cantidadContada).gte(0))) return error(422, 'Escribe la cantidad contada.');
-  // El servidor calcula la diferencia contra la existencia vigente, no contra la del dispositivo.
-  const actual = D((await obtener<{ cantidad: string }>('existencias', c.id))?.cantidad ?? 0);
+  let actual = D(0);
+  if (d.cargaId) {
+    const existenciasCarga = await todos<ExistenciaCarga>('existenciasCarga');
+    const ec = existenciasCarga.find((x) => x.cargaId === d.cargaId && x.clasificacionId === c.id);
+    actual = D(ec?.cantidad ?? 0);
+  } else {
+    actual = D((await obtener<{ cantidad: string }>('existencias', c.id))?.cantidad ?? 0);
+  }
   const delta = D(d.cantidadContada).minus(actual);
-  if (!delta.isZero()) await moverExistencia(c.id, c.productoId, delta.toString(), 'ajuste', null, d.motivo || 'Conteo físico', usuario.nombre, new Date().toISOString());
+  if (!delta.isZero()) await moverExistencia(c.id, c.productoId, delta.toString(), 'ajuste', null, d.motivo || 'Conteo físico', usuario.nombre, new Date().toISOString(), nuevoId(), d.cargaId ?? null);
   await auditar(usuario.nombre, 'inventario', `${usuario.nombre} ajustó ${c.nombre}: ${actual} → ${d.cantidadContada}`);
   return ok({ delta: delta.toString() });
 });
@@ -572,7 +578,26 @@ ruta('POST', '/ventas/:id/cancelar', async ({ cuerpo, usuario, params }) => {
   if (v.estado === 'cancelada') return error(409, 'La venta ya está cancelada.');
   if (D(v.pagado).gt(0)) return error(409, 'La venta tiene pagos registrados; revisa los pagos antes de cancelar.');
   const ahora = new Date().toISOString();
-  for (const r of v.renglones) await moverExistencia(r.clasificacionId, r.productoId, r.cantidad, 'cancelacion', `Venta ${folioVenta(v)}`, cuerpo.motivo ?? null, usuario.nombre, ahora);
+  for (const r of v.renglones) {
+    let cargaIdDevolver = r.cargaId ?? null;
+    let motivoRenglon = cuerpo.motivo ?? null;
+    if (r.cargaId) {
+      const carga = await obtener<Carga>('cargas', r.cargaId);
+      if (carga) {
+        if (carga.estado === 'cerrada') {
+          const tieneLiquidadas = (carga as any).liquidada === true;
+          if (!tieneLiquidadas) {
+            await guardar('cargas', carga.id, { ...carga, estado: 'abierta', cerradaEn: null });
+            cargaIdDevolver = r.cargaId;
+          } else {
+            cargaIdDevolver = null;
+            motivoRenglon = (cuerpo.motivo ? cuerpo.motivo + ' - ' : '') + 'Carga liquidada: devuelto a existencia general';
+          }
+        }
+      }
+    }
+    await moverExistencia(r.clasificacionId, r.productoId, r.cantidad, 'cancelacion', `Venta ${folioVenta(v)}`, motivoRenglon, usuario.nombre, ahora, nuevoId(), cargaIdDevolver);
+  }
   await guardar('ventas', v.id, { ...v, estado: 'cancelada', canceladaEn: ahora });
   await auditar(usuario.nombre, 'ventas', `${usuario.nombre} canceló la venta ${folioVenta(v)}${cuerpo.motivo ? `: ${cuerpo.motivo}` : ''}`);
   return ok();

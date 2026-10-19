@@ -21,7 +21,7 @@ export const esquemaVenta = z.object({
   venceEl: dia.nullable(),
   motivoRevision: z.string().max(500).nullable().optional(),
   renglones: z
-    .array(z.object({ clasificacionId: id, cantidad: decimal, precio: decimal, precioReferencia: decimal, cargaId: id.nullable().optional() }))
+    .array(z.object({ clasificacionId: id, cantidad: decimal, precio: decimal, precioReferencia: decimal, cargaId: id.nullable().optional(), origenNombre: z.string().max(160).nullable().optional() }))
     .min(1)
     .max(50),
 });
@@ -51,6 +51,7 @@ export const esquemaMerma = z.object({
   cantidad: decimal,
   motivo: z.string().min(1).max(120),
   nota: z.string().max(500).nullable(),
+  cargaId: id.nullable().optional(),
 });
 
 export const esquemaCliente = z.object({

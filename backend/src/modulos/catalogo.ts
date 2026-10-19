@@ -3,7 +3,7 @@ import { and, eq, isNull, notInArray } from 'drizzle-orm';
 import { Router } from 'express';
 import { v7 as uuid } from 'uuid';
 import { z } from 'zod';
-import { clasificaciones, clientes, existencias, productos, proveedores, unidades } from '../db/esquema';
+import { clasificaciones, clientes, existencias, existenciasCarga, productos, proveedores, unidades } from '../db/esquema';
 import { invalido, noEncontrado } from '../http/errores';
 import { exigir, rutaNegocio, type Contexto } from '../http/ruta';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -111,7 +111,14 @@ rutasCatalogo.post(
 rutasCatalogo.post(
   '/inventario/ajustes',
   rutaNegocio('inventario.ajustar', async ({ tx, usuario, req }) => {
-    const d = z.object({ clasificacionId: z.uuid(), cantidadContada: decimal, motivo: z.string().trim().max(200).default('Conteo físico') }).parse(req.body);
+    const d = z
+      .object({
+        clasificacionId: z.uuid(),
+        cantidadContada: decimal,
+        motivo: z.string().trim().max(200).default('Conteo físico'),
+        cargaId: z.string().uuid().nullable().optional(),
+      })
+      .parse(req.body);
     const [c] = await tx
       .select({ c: clasificaciones, p: productos, u: unidades })
       .from(clasificaciones)
@@ -120,9 +127,19 @@ rutasCatalogo.post(
       .where(eq(clasificaciones.id, d.clasificacionId));
     if (!c) throw noEncontrado('La clasificación no existe.');
     if (!c.u.permiteDecimales && !D(d.cantidadContada).isInteger()) throw invalido('Esta unidad solo acepta cantidades enteras.');
-    // Bloquea la fila de existencia para que el conteo no se cruce con una venta simultánea.
-    const [e] = await tx.select().from(existencias).where(eq(existencias.clasificacionId, c.c.id)).for('update');
-    const actual = D(e?.cantidad ?? 0);
+
+    let actual = D(0);
+    if (d.cargaId) {
+      const [ec] = await tx
+        .select()
+        .from(existenciasCarga)
+        .where(and(eq(existenciasCarga.cargaId, d.cargaId), eq(existenciasCarga.clasificacionId, c.c.id)))
+        .for('update');
+      actual = D(ec?.cantidad ?? 0);
+    } else {
+      const [e] = await tx.select().from(existencias).where(eq(existencias.clasificacionId, c.c.id)).for('update');
+      actual = D(e?.cantidad ?? 0);
+    }
     const delta = D(d.cantidadContada).minus(actual);
     if (!delta.isZero()) {
       await moverExistencia(tx, {
@@ -132,13 +149,14 @@ rutasCatalogo.post(
         delta: delta.toString(),
         tipo: 'ajuste',
         motivo: d.motivo || 'Conteo físico',
+        cargaId: d.cargaId ?? undefined,
         usuarioId: usuario.id,
         usuarioNombre: usuario.nombre,
         creadoEn: new Date(),
       });
     }
     await registrarAuditoria(tx, usuario, 'inventario', `${usuario.nombre} ajustó ${c.p.nombre} ${c.c.nombre}: ${actual} → ${D(d.cantidadContada)}`, {
-      tabla: 'existencias',
+      tabla: d.cargaId ? 'existencias_carga' : 'existencias',
       registroId: c.c.id,
       antes: { cantidad: actual.toString() },
       despues: { cantidad: D(d.cantidadContada).toString() },

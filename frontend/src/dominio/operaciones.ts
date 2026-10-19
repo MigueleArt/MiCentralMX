@@ -26,7 +26,7 @@ import { aCantidad, aImporte, D, formatoMXN, sumar } from '../lib/dinero';
 import { ahoraIso } from '../lib/fechas';
 import { hashOperacion, nuevoId } from '../lib/ids';
 import { avisarOperacionNueva } from '../sync/eventos';
-import { catalogo, clientesVista, ordenCobro, existenciasEfectivas } from './consultas';
+import { catalogo, clientesVista, ordenCobro, existenciasEfectivas, cargasAbiertas } from './consultas';
 import { conAlmacenamiento, ErrorValidacion } from './errores';
 import { cantidadConUnidad, CATEGORIAS_DINERO, folioCompra, folioVenta } from './formato';
 import { reservarFolio } from './folios';
@@ -371,6 +371,17 @@ export async function registrarMerma(entrada: Omit<DatosMerma, 'id' | 'productoI
   validarCantidad(entrada.cantidad, p.unidad.permiteDecimales, 'cantidad');
   if (!entrada.motivo) throw new ErrorValidacion('Elige el motivo de la merma.', 'motivo');
 
+  let cargaId = entrada.cargaId;
+  if (cargaId === undefined) {
+    const abiertas = await cargasAbiertas();
+    const cargasConStock = abiertas.filter((ca) => (ca.existencias.get(c.clasificacion.id) ?? D(0)).gt(0));
+    if (cargasConStock.length > 0) {
+      cargaId = cargasConStock[0].carga.id;
+    } else {
+      cargaId = null;
+    }
+  }
+
   const merma: DatosMerma = {
     id: nuevoId(),
     clasificacionId: c.clasificacion.id,
@@ -378,6 +389,7 @@ export async function registrarMerma(entrada: Omit<DatosMerma, 'id' | 'productoI
     cantidad: aCantidad(entrada.cantidad),
     motivo: entrada.motivo,
     nota: entrada.nota?.trim() || null,
+    cargaId: cargaId ?? null,
   };
   return conAlmacenamiento(async () => {
     const op = await nuevaOperacion(
@@ -396,6 +408,7 @@ export async function registrarMerma(entrada: Omit<DatosMerma, 'id' | 'productoI
         tipo: 'merma',
         referencia: null,
         motivo: merma.motivo,
+        cargaId: merma.cargaId ?? null,
         usuarioNombre: sesion.usuario.nombre,
         creadoEn: op.creadoEnDispositivo,
         operacionId: op.operacionId,

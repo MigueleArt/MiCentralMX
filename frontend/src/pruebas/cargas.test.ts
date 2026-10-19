@@ -3,7 +3,7 @@ import { fijarToken, usarTransporte } from '../api/cliente';
 import { iniciarSesion } from '../auth/sesion';
 import { db } from '../db/db';
 import { asignarCargaRenglon, catalogo, existenciasCargaEfectivas } from '../dominio/consultas';
-import { registrarCarga, registrarVenta } from '../dominio/operaciones';
+import { registrarCarga, registrarVenta, registrarMerma } from '../dominio/operaciones';
 import { manejarSolicitud, reiniciarServidorDemo } from '../demo/servidor';
 import { sincronizar } from '../sync/motor';
 import { nuevoId } from '../lib/ids';
@@ -305,5 +305,78 @@ describe('cargas y asignación en frontend', () => {
     expect(venta.renglones[0].cantidad).toBe('2.5');
     const existencias = await existenciasCargaEfectivas();
     expect(existencias.get(`${cargaId}:${clas.clasificacion.id}`)?.toString()).toBe('47.5');
+  });
+
+  it('merma resta de existenciasCargaEfectivas y por omisión toma la carga más antigua con existencia', async () => {
+    await entrar('ana');
+    const clas = await obtenerClasificacion('Jitomate Saladette', 'Primera / Grande');
+    const provs = await db.proveedores.toArray();
+
+    // 1. Carga más antigua (fecha ayer)
+    const cargaAntiguaId = nuevoId();
+    await db.cargas.put({
+      id: cargaAntiguaId,
+      fecha: '2026-10-17',
+      proveedorId: provs[0].id,
+      estado: 'abierta',
+      renglones: [{ linea: 0, clasificacionId: clas.clasificacion.id, cantidad: '30' }],
+      usuarioId: nuevoId(),
+      usuarioNombre: 'Ana',
+      dispositivoId: 'demo',
+      creadoEnDispositivo: '2026-10-17T10:00:00.000Z',
+      cerradaEn: null,
+    });
+    await db.existenciasCarga.put({
+      id: nuevoId(),
+      cargaId: cargaAntiguaId,
+      clasificacionId: clas.clasificacion.id,
+      cantidad: '30',
+    });
+
+    // 2. Carga más reciente (fecha hoy)
+    const cargaRecienteId = nuevoId();
+    await db.cargas.put({
+      id: cargaRecienteId,
+      fecha: '2026-10-18',
+      proveedorId: provs[0].id,
+      estado: 'abierta',
+      renglones: [{ linea: 0, clasificacionId: clas.clasificacion.id, cantidad: '20' }],
+      usuarioId: nuevoId(),
+      usuarioNombre: 'Ana',
+      dispositivoId: 'demo',
+      creadoEnDispositivo: '2026-10-18T10:00:00.000Z',
+      cerradaEn: null,
+    });
+    await db.existenciasCarga.put({
+      id: nuevoId(),
+      cargaId: cargaRecienteId,
+      clasificacionId: clas.clasificacion.id,
+      cantidad: '20',
+    });
+
+    // Registrar merma sin pasar cargaId -> debe tomar la más antigua (cargaAntiguaId)
+    const merma = await registrarMerma({
+      clasificacionId: clas.clasificacion.id,
+      cantidad: '5',
+      motivo: 'Maduro / daño',
+      nota: null,
+    });
+    expect(merma.cargaId).toBe(cargaAntiguaId);
+
+    // existenciasCargaEfectivas debe haber restado los 5 de cargaAntiguaId
+    let existencias = await existenciasCargaEfectivas();
+    expect(existencias.get(`${cargaAntiguaId}:${clas.clasificacion.id}`)?.toString()).toBe('25');
+    expect(existencias.get(`${cargaRecienteId}:${clas.clasificacion.id}`)?.toString()).toBe('20');
+
+    // Registrar merma explícita sobre cargaRecienteId
+    await registrarMerma({
+      clasificacionId: clas.clasificacion.id,
+      cantidad: '3',
+      motivo: 'Pudrición',
+      nota: null,
+      cargaId: cargaRecienteId,
+    });
+    existencias = await existenciasCargaEfectivas();
+    expect(existencias.get(`${cargaRecienteId}:${clas.clasificacion.id}`)?.toString()).toBe('17');
   });
 });
