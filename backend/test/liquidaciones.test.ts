@@ -659,5 +659,342 @@ suite('Liquidaciones a productores (cortes y cuentas)', () => {
       })
       .expect(403);
   });
+
+  it('mermas cobradas: editar el texto de un concepto de merma no la vuelve a ofrecer, y emitir dos cortes con la misma merma falla', async () => {
+    const ana = await entrar('ana');
+    const c = await clasificacion(ana, 'Jitomate Saladette', 'Primera / Grande');
+
+    const resProv = await ana
+      .post('/proveedores', {
+        nombre: `Productor Merma Cobrada ${uuid().slice(0, 6)}`,
+        tipo: 'tercero',
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+      })
+      .expect(200);
+    const prov = resProv.body;
+
+    const cargaId = uuid();
+    await empujar(ana, [
+      operacion(ana, 'carga', {
+        id: cargaId,
+        fecha: '2026-10-18',
+        proveedorId: prov.id,
+        proveedorNombre: prov.nombre,
+        proveedorTipo: 'tercero',
+        estado: 'abierta',
+        renglones: [{ linea: 0, clasificacionId: c.id, cantidad: '30.00' }],
+      }),
+    ]);
+
+    // Registrar merma en esa carga
+    const mermaId = uuid();
+    await empujar(ana, [
+      operacion(ana, 'merma.crear', {
+        id: mermaId,
+        clasificacionId: c.id,
+        cantidad: '5.00',
+        motivo: 'maduro en exceso',
+        nota: null,
+        cargaId,
+        creadoEn: new Date().toISOString(),
+      }),
+    ]);
+
+    // Crear dos ventas
+    const v1 = venta(ana, [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00' }], {
+      renglones: [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00', precioReferencia: '20.00', cargaId }],
+    });
+    const v2 = venta(ana, [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00' }], {
+      folio: v1.folio + 1,
+      renglones: [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00', precioReferencia: '20.00', cargaId }],
+    });
+    await empujar(ana, [operacion(ana, 'venta.crear', v1), operacion(ana, 'venta.crear', v2)]);
+
+    // GET /liquidaciones/pendientes ofrece la merma
+    const pend1 = await ana.get(`/liquidaciones/pendientes?proveedorId=${prov.id}`).expect(200);
+    const mermaEncontrada = pend1.body.mermas.find((m: any) => m.id === mermaId);
+    expect(mermaEncontrada).toBeDefined();
+
+    // Emitir primer corte incluyendo esa merma con texto libre
+    await ana
+      .post('/liquidaciones', {
+        proveedorId: prov.id,
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+        comisionFinal: '20.00',
+        renglones: [{ ventaId: v1.id, linea: 0, cargaId, importe: '200.00' }],
+        conceptos: [
+          {
+            tipo: 'merma',
+            concepto: 'Texto modificado que no sigue el formato antiguo',
+            monto: '50.00',
+            movimientoId: mermaId,
+          },
+        ],
+      })
+      .expect(200);
+
+    // GET /liquidaciones/pendientes NO debe ofrecer la merma aunque el texto del concepto haya sido arbitrario
+    const pend2 = await ana.get(`/liquidaciones/pendientes?proveedorId=${prov.id}`).expect(200);
+    expect(pend2.body.mermas.find((m: any) => m.id === mermaId)).toBeUndefined();
+
+    // Intentar emitir un segundo corte pasando la misma merma con movimientoId debe fallar con 409
+    const errDup = await ana
+      .post('/liquidaciones', {
+        proveedorId: prov.id,
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+        comisionFinal: '20.00',
+        renglones: [{ ventaId: v2.id, linea: 0, cargaId, importe: '200.00' }],
+        conceptos: [
+          {
+            tipo: 'merma',
+            concepto: 'Otro texto intentando cobrar la misma merma',
+            monto: '50.00',
+            movimientoId: mermaId,
+          },
+        ],
+      })
+      .expect(409);
+    expect(errDup.body.mensaje).toMatch(/merma.*ya fue incluida/i);
+  });
+
+  it('saldo cero tras una cancelación ajustada, y un pago de compra a crédito no cuenta en la cuenta del productor', async () => {
+    const ana = await entrar('ana');
+    const c = await clasificacion(ana, 'Jitomate Saladette', 'Primera / Grande');
+
+    const resProv = await ana
+      .post('/proveedores', {
+        nombre: `Productor Compra Credito ${uuid().slice(0, 6)}`,
+        tipo: 'tercero',
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+      })
+      .expect(200);
+    const prov = resProv.body;
+
+    // 1. Registrar una compra a crédito al proveedor
+    const compraId = uuid();
+    await empujar(ana, [
+      operacion(ana, 'compra.crear', {
+        id: compraId,
+        folio: null,
+        folioProvisional: null,
+        proveedorId: prov.id,
+        formaPago: 'credito',
+        venceEl: '2026-11-01',
+        renglones: [{ clasificacionId: c.id, cantidad: '50.00', costo: '20.00' }],
+      }),
+    ]);
+
+    // 2. Registrar el pago de esa compra de crédito
+    const pagoCompraId = uuid();
+    await empujar(ana, [
+      operacion(ana, 'movimiento_dinero.crear', {
+        id: pagoCompraId,
+        tipo: 'egreso',
+        categoria: 'pago_proveedor',
+        concepto: 'Pago de compra a crédito #12',
+        monto: '1000.00',
+        metodo: 'transferencia',
+        proveedorId: prov.id,
+        compraId,
+        creadoEn: new Date().toISOString(),
+      }),
+    ]);
+
+    // 3. Consultar estado de cuenta y saldos: el pago de la compra NO debe restar en la cuenta de consigna del productor
+    const edoCredito = await ana.get(`/proveedores/${prov.id}/estado-cuenta`).expect(200);
+    expect(Number(edoCredito.body.totalPagos)).toBe(0);
+    expect(Number(edoCredito.body.saldo)).toBe(0);
+
+    const saldosCredito = await ana.get('/proveedores/saldos').expect(200);
+    const saldoProv = saldosCredito.body.find((s: any) => s.proveedorId === prov.id);
+    expect(Number(saldoProv.saldo)).toBe(0);
+
+    // 4. Ahora probamos la consigna: carga, venta, corte y cancelación ajustada
+    const cargaId = uuid();
+    await empujar(ana, [
+      operacion(ana, 'carga', {
+        id: cargaId,
+        fecha: '2026-10-18',
+        proveedorId: prov.id,
+        proveedorNombre: prov.nombre,
+        proveedorTipo: 'tercero',
+        estado: 'abierta',
+        renglones: [{ linea: 0, clasificacionId: c.id, cantidad: '10.00' }],
+      }),
+    ]);
+
+    const v = venta(ana, [{ clasificacionId: c.id, cantidad: '10.00', precio: '30.00' }], {
+      renglones: [{ clasificacionId: c.id, cantidad: '10.00', precio: '30.00', precioReferencia: '30.00', cargaId }],
+    });
+    await empujar(ana, [operacion(ana, 'venta.crear', v)]);
+
+    // Emitir corte: vendido 300, comisión 10% (30), neto 270
+    await ana
+      .post('/liquidaciones', {
+        proveedorId: prov.id,
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+        comisionFinal: '30.00',
+        renglones: [{ ventaId: v.id, linea: 0, cargaId, importe: '300.00' }],
+      })
+      .expect(200);
+
+    // Cancelar la venta cortada: se genera cargo de ajuste por 300 * (1 - 0.10) = 270
+    await ana.post(`/ventas/${v.id}/cancelar`, { motivo: 'Devuelto por cliente' }).expect(200);
+
+    // Saldo debe ser exactamente cero tras la cancelación ajustada
+    const edoFinal = await ana.get(`/proveedores/${prov.id}/estado-cuenta`).expect(200);
+    expect(Number(edoFinal.body.saldo)).toBe(0);
+  });
+
+  it('valida en la emisión que comision_final sea >= 0 y <= total_vendido, y guarda mixta cuando hay varias', async () => {
+    const ana = await entrar('ana');
+    const c = await clasificacion(ana, 'Jitomate Saladette', 'Primera / Grande');
+
+    const resProv = await ana
+      .post('/proveedores', {
+        nombre: `Productor Mixta ${uuid().slice(0, 6)}`,
+        tipo: 'tercero',
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+      })
+      .expect(200);
+    const prov = resProv.body;
+
+    // Carga 1: comisión 10%
+    const carga1Id = uuid();
+    await empujar(ana, [
+      operacion(ana, 'carga', {
+        id: carga1Id,
+        fecha: '2026-10-18',
+        proveedorId: prov.id,
+        proveedorNombre: prov.nombre,
+        proveedorTipo: 'tercero',
+        estado: 'abierta',
+        renglones: [{ linea: 0, clasificacionId: c.id, cantidad: '10.00' }],
+      }),
+    ]);
+
+    // Carga 2: comisión por unidad $2
+    const carga2Id = uuid();
+    await empujar(ana, [
+      operacion(ana, 'carga', {
+        id: carga2Id,
+        fecha: '2026-10-18',
+        proveedorId: prov.id,
+        proveedorNombre: prov.nombre,
+        proveedorTipo: 'tercero',
+        estado: 'abierta',
+        renglones: [{ linea: 0, clasificacionId: c.id, cantidad: '10.00' }],
+      }),
+    ]);
+    await ana.patch(`/cargas/${carga2Id}/comision`, { comisionTipo: 'por_unidad', comisionValor: '2.00' }).expect(200);
+
+    const v1 = venta(ana, [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00' }], {
+      renglones: [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00', precioReferencia: '20.00', cargaId: carga1Id }],
+    });
+    const v2 = venta(ana, [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00' }], {
+      folio: v1.folio + 1,
+      renglones: [{ clasificacionId: c.id, cantidad: '10.00', precio: '20.00', precioReferencia: '20.00', cargaId: carga2Id }],
+    });
+    await empujar(ana, [operacion(ana, 'venta.crear', v1), operacion(ana, 'venta.crear', v2)]);
+
+    // Total vendido: 200 + 200 = 400.
+    // 1. Validar comisión negativa -> 422
+    await ana
+      .post('/liquidaciones', {
+        proveedorId: prov.id,
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+        comisionFinal: '-5.00',
+        renglones: [{ ventaId: v1.id, linea: 0, cargaId: carga1Id, importe: '200.00' }],
+      })
+      .expect(422);
+
+    // 2. Validar comisión > total_vendido -> 422
+    await ana
+      .post('/liquidaciones', {
+        proveedorId: prov.id,
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+        comisionFinal: '500.00',
+        comisionNota: 'Excede total vendido',
+        renglones: [{ ventaId: v1.id, linea: 0, cargaId: carga1Id, importe: '200.00' }],
+      })
+      .expect(422);
+
+    // 3. Emitir corte con ambas cargas (comisiones heterogéneas) -> comision_tipo debe guardarse como 'mixta'
+    // Carga 1: 10% de 200 = 20. Carga 2: 10 unid * $2 = 20. Calculada = 40.
+    const resLiq = await ana
+      .post('/liquidaciones', {
+        proveedorId: prov.id,
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+        comisionFinal: '40.00',
+        renglones: [
+          { ventaId: v1.id, linea: 0, cargaId: carga1Id, importe: '200.00' },
+          { ventaId: v2.id, linea: 0, cargaId: carga2Id, importe: '200.00' },
+        ],
+      })
+      .expect(200);
+
+    expect(resLiq.body.liquidacion.comisionTipo).toBe('mixta');
+
+    // 4. Mostrar en el estado de cuenta
+    const edo = await ana.get(`/proveedores/${prov.id}/estado-cuenta`).expect(200);
+    const itemCorte = edo.body.items.find((it: any) => it.tipo === 'corte');
+    expect(itemCorte).toBeDefined();
+    expect(itemCorte.comisionTipo).toBe('mixta');
+    expect(edo.body.cortes[0].comisionTipo).toBe('mixta');
+  });
+
+  it('PATCH /cargas/:id/comision debe exigir liquidaciones.gestionar', async () => {
+    const carlos = await entrar('carlos'); // trabajador sin liquidaciones.gestionar
+    const ana = await entrar('ana');
+    const c = await clasificacion(ana, 'Jitomate Saladette', 'Primera / Grande');
+
+    const resProv = await ana
+      .post('/proveedores', {
+        nombre: `Productor Permiso Carga ${uuid().slice(0, 6)}`,
+        tipo: 'tercero',
+        comisionTipo: 'porcentaje',
+        comisionValor: '10.00',
+      })
+      .expect(200);
+    const prov = resProv.body;
+
+    const cargaId = uuid();
+    await empujar(ana, [
+      operacion(ana, 'carga', {
+        id: cargaId,
+        fecha: '2026-10-18',
+        proveedorId: prov.id,
+        proveedorNombre: prov.nombre,
+        proveedorTipo: 'tercero',
+        estado: 'abierta',
+        renglones: [{ linea: 0, clasificacionId: c.id, cantidad: '10.00' }],
+      }),
+    ]);
+
+    // Carlos intenta modificar comisión -> 403 Forbidden
+    await carlos
+      .patch(`/cargas/${cargaId}/comision`, {
+        comisionTipo: 'por_unidad',
+        comisionValor: '4.00',
+      })
+      .expect(403);
+
+    // Ana (con liquidaciones.gestionar) modifica comisión -> 200 OK
+    await ana
+      .patch(`/cargas/${cargaId}/comision`, {
+        comisionTipo: 'por_unidad',
+        comisionValor: '4.00',
+      })
+      .expect(200);
+  });
 });
 
