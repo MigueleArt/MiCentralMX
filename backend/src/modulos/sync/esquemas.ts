@@ -65,6 +65,7 @@ export const esquemaCliente = z.object({
 
 export const CATEGORIAS = {
   pago_proveedor: 'egreso',
+  anticipo_productor: 'egreso',
   flete: 'egreso',
   sueldo: 'egreso',
   otro_egreso: 'egreso',
@@ -79,6 +80,7 @@ export const esquemaMovimientoDinero = z.object({
   monto: decimal,
   metodo: z.enum(['efectivo', 'transferencia', 'otro']),
   proveedorId: id.nullable(),
+  compraId: id.nullable().optional(),
   creadoEn: fecha,
 });
 

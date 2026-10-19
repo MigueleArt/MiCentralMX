@@ -53,12 +53,17 @@ export interface Cliente {
 
 export type TipoProveedor = 'tercero' | 'rancho_propio';
 
+export type ComisionTipoBase = 'porcentaje' | 'por_unidad';
+export type ComisionTipo = 'porcentaje' | 'por_unidad' | 'mixta';
+
 export interface Proveedor {
   id: string;
   nombre: string;
   telefono: string | null;
   productos: string;
   tipo: TipoProveedor;
+  comisionTipo?: ComisionTipoBase | null;
+  comisionValor?: string | null;
   archivadoEn: string | null;
 }
 
@@ -78,6 +83,8 @@ export interface Carga {
   proveedorNombre?: string;
   proveedorTipo?: TipoProveedor;
   estado: EstadoCarga;
+  comisionTipo?: ComisionTipoBase | null;
+  comisionValor?: string | null;
   renglones: RenglonCarga[];
   usuarioId: string;
   usuarioNombre: string;
@@ -200,7 +207,7 @@ export interface MovimientoInventario {
   creadoEn: string;
 }
 
-export type CategoriaDinero = 'pago_proveedor' | 'flete' | 'renta' | 'sueldo' | 'otro_egreso' | 'otro_ingreso';
+export type CategoriaDinero = 'pago_proveedor' | 'anticipo_productor' | 'flete' | 'renta' | 'sueldo' | 'otro_egreso' | 'otro_ingreso';
 
 export interface MovimientoDinero {
   id: string;
@@ -210,6 +217,7 @@ export interface MovimientoDinero {
   monto: string;
   metodo: MetodoPago;
   proveedorId: string | null;
+  compraId?: string | null;
   usuarioNombre: string;
   creadoEn: string;
 }
@@ -234,4 +242,64 @@ export interface Negocio {
 export interface ConfiguracionNegocio {
   ventanaOfflineHoras: number;
   plazoCreditoDias: number;
+}
+
+export type TipoConceptoLiquidacion = 'flete' | 'tara' | 'merma' | 'otro';
+
+export interface LiquidacionRenglon {
+  id?: string;
+  liquidacionId: string;
+  ventaId: string;
+  linea: number;
+  cargaId: string | null;
+  importe: string;
+  unidades: string;
+}
+
+export interface LiquidacionConcepto {
+  id?: string;
+  liquidacionId: string;
+  linea: number;
+  tipo: TipoConceptoLiquidacion;
+  concepto: string;
+  monto: string;
+  movimientoId?: string | null;
+}
+
+export interface Liquidacion {
+  id: string;
+  folio: number;
+  proveedorId: string;
+  periodoDesde: string | null;
+  periodoHasta: string | null;
+  totalVendido: string;
+  unidadesVendidas: string;
+  comisionTipo: ComisionTipo;
+  comisionValor: string;
+  comisionCalculada: string;
+  comisionFinal: string;
+  comisionNota: string | null;
+  descuentosTotal: string;
+  neto: string;
+  usuarioId: string;
+  usuarioNombre: string;
+  creadoEn: string;
+  renglones?: LiquidacionRenglon[];
+  conceptos?: LiquidacionConcepto[];
+}
+
+export type TipoAjusteProductor = 'cargo' | 'abono';
+export type CategoriaAjusteProductor = 'cancelacion' | 'incobrable' | 'otro';
+
+export interface AjusteProductor {
+  id: string;
+  proveedorId: string;
+  tipo: TipoAjusteProductor;
+  categoria: CategoriaAjusteProductor;
+  concepto: string;
+  monto: string;
+  ventaId: string | null;
+  usuarioId: string;
+  usuarioNombre: string;
+  creadoEn: string;
 }

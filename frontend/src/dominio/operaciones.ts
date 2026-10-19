@@ -7,10 +7,11 @@
  */
 import Decimal from 'decimal.js';
 import { exigirOperable, tienePermiso } from '../auth/sesion';
-import type { DatosMerma, DatosOperacion, TipoOperacion } from '@micentralmx/shared/api';
+import type { DatosCrearAjusteProductor, DatosCrearLiquidacion, DatosMerma, DatosOperacion, TipoOperacion } from '@micentralmx/shared/api';
 import type {
   Carga,
   Cliente,
+  ComisionTipo,
   Compra,
   FormaPago,
   MetodoPago,
@@ -20,6 +21,10 @@ import type {
   RenglonCompra,
   RenglonVenta,
   Venta,
+  Liquidacion,
+  LiquidacionRenglon,
+  LiquidacionConcepto,
+  AjusteProductor,
 } from '@micentralmx/shared/entidades';
 import { db, type OperacionLocal, type SesionLocal } from '../db/db';
 import { aCantidad, aImporte, D, formatoMXN, sumar } from '../lib/dinero';
@@ -488,11 +493,13 @@ export async function registrarMovimientoDinero(entrada: EntradaMovimientoDinero
   const categoria = CATEGORIAS_DINERO[entrada.categoria];
   let concepto = entrada.concepto.trim();
   let proveedorId: string | null = null;
-  if (entrada.categoria === 'pago_proveedor') {
+  if (entrada.categoria === 'pago_proveedor' || entrada.categoria === 'anticipo_productor') {
     const proveedor = entrada.proveedorId ? await db.proveedores.get(entrada.proveedorId) : undefined;
     if (!proveedor) throw new ErrorValidacion('Elige el proveedor.', 'proveedor');
     proveedorId = proveedor.id;
-    concepto = `Pago a proveedor · ${proveedor.nombre}`;
+    concepto = entrada.categoria === 'anticipo_productor'
+      ? `Anticipo a productor · ${proveedor.nombre}`
+      : `Pago a proveedor · ${proveedor.nombre}`;
   }
   if (!concepto) concepto = categoria.nombre;
   const mov: MovimientoDinero = {
@@ -611,3 +618,32 @@ export async function cerrarCarga(
   const { api } = await import('../api/cliente');
   return api('POST', `/cargas/${cargaId}/cerrar`, { resoluciones });
 }
+
+// ── Liquidaciones y ajustes de productores (en línea) ──────────────────────
+
+export async function emitirLiquidacion(datos: DatosCrearLiquidacion) {
+  const { api } = await import('../api/cliente');
+  return api<{ liquidacion: Liquidacion; renglones: LiquidacionRenglon[]; conceptos: LiquidacionConcepto[] }>(
+    'POST',
+    '/liquidaciones',
+    datos,
+  );
+}
+
+export async function registrarAjusteProductor(datos: DatosCrearAjusteProductor) {
+  const { api } = await import('../api/cliente');
+  return api<AjusteProductor>('POST', '/ajustes-productor', datos);
+}
+
+export async function actualizarComisionCarga(
+  cargaId: string,
+  datos: { comisionTipo: ComisionTipo; comisionValor: string | null },
+) {
+  const { api } = await import('../api/cliente');
+  return api<{ id: string; comisionTipo: ComisionTipo; comisionValor: string | null }>(
+    'PATCH',
+    `/cargas/${cargaId}/comision`,
+    datos,
+  );
+}
+

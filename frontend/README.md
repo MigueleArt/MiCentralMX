@@ -77,6 +77,9 @@ La numeración es la del prototipo UI/UX con el que se diseñó la app (36 panta
 | — | Nueva carga | `pantallas/carga/NuevaCarga.tsx`: registro rápido de carga del día con alta rápida de productor/rancho |
 | — | Detalle de carga | `pantallas/carga/DetalleCarga.tsx`: balance de la carga, ventas asociadas y cierre con resolución de sobrantes |
 | — | Precios de hoy | `pantallas/inventario/PreciosHoy.tsx`: edición masiva de precios del catálogo en línea |
+| — | Detalle de productor (Estado de cuenta) | `pantallas/proveedores/DetalleProveedor.tsx`: estado de cuenta cronológico con cortes, pagos, anticipos, ajustes, saldo corrido y estado FIFO de cortes |
+| — | Nuevo corte de cuenta | `pantallas/proveedores/NuevoCorte.tsx`: emisión de liquidación agrupada por carga, atajos de periodo, comisiones y deducciones |
+| — | Cargo / Abono a productor | `pantallas/proveedores/NuevoAjusteProductor.tsx`: registro de ajustes con cálculo sugerido de pérdidas compartidas por incobrables |
 
 ## Backend
 

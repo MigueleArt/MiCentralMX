@@ -3,11 +3,15 @@
  * Reproducen el negocio del prototipo UI/UX; las fechas se calculan respecto a hoy.
  */
 import type {
+  AjusteProductor,
   Carga,
   Clasificacion,
   Cliente,
   Compra,
   ExistenciaCarga,
+  Liquidacion,
+  LiquidacionConcepto,
+  LiquidacionRenglon,
   MovimientoDinero,
   MovimientoInventario,
   Pago,
@@ -138,13 +142,26 @@ export function crearSemilla() {
 
   const proveedores: Proveedor[] = [
     { id: nuevoId(), nombre: 'Rancho La Joya', telefono: '771 123 4567', tipo: 'rancho_propio', productos: 'Jitomate Saladette', archivadoEn: null },
-    { id: nuevoId(), nombre: 'Don Ale', telefono: '775 987 6543', tipo: 'tercero', productos: 'Jitomate Saladette', archivadoEn: null },
+    {
+      id: nuevoId(),
+      nombre: 'Don Ale',
+      telefono: '775 987 6543',
+      tipo: 'tercero',
+      productos: 'Jitomate Saladette',
+      comisionTipo: 'porcentaje',
+      comisionValor: '10.00',
+      archivadoEn: null,
+    },
     { id: nuevoId(), nombre: 'Agrícola San Juan', telefono: '228 123 4567', tipo: 'tercero', productos: 'Jitomate, chile serrano', archivadoEn: null },
     { id: nuevoId(), nombre: 'Huertas de Michoacán', telefono: '452 234 5678', tipo: 'tercero', productos: 'Aguacate Hass', archivadoEn: null },
     { id: nuevoId(), nombre: 'Cítricos del Golfo', telefono: '229 345 6789', tipo: 'tercero', productos: 'Limón persa', archivadoEn: null },
     { id: nuevoId(), nombre: 'Productores Unidos de Puebla', telefono: '222 456 7890', tipo: 'tercero', productos: 'Cebolla, papa', archivadoEn: null },
   ];
   const prov = (n: string) => proveedores.find((p) => p.nombre.startsWith(n))!;
+  const rancho = prov('Rancho');
+  const donAle = prov('Don Ale');
+  const carga1Id = nuevoId();
+  const carga2Id = nuevoId();
 
   const renglon = (prod: string, cn: string, cantidad: number, cargaId?: string | null, origenNombre?: string | null): RenglonVenta => {
     const c = clas[`${prod}|${cn}`];
@@ -212,7 +229,7 @@ export function crearSemilla() {
   venta(117, haceDias(2, 8), [renglon('Aguacate Hass', 'Segunda / Mediano', 5), renglon('Jitomate Saladette', 'Tercera / Chico', 4)], {
     cliente: cli('Mercado'), forma: 'credito', vence: sumarDias(hoy, 19),
   });
-  venta(120, hace(390), [renglon('Jitomate Saladette', 'Segunda / Mediano', 2)], { usuario: ana });
+  const v120 = venta(120, hace(390), [renglon('Jitomate Saladette', 'Segunda / Mediano', 2, carga2Id, 'Don Ale')], { usuario: ana });
   venta(121, hace(330), [renglon('Chile serrano', 'Única', 25), renglon('Limón persa', 'Segunda / Mediano', 2)], {
     cliente: cli('Cocina'), forma: 'credito', vence: sumarDias(hoy, 7),
   });
@@ -268,12 +285,6 @@ export function crearSemilla() {
   const cJitSeg = clas['Jitomate Saladette|Segunda / Mediano'];
   const cJitTer = clas['Jitomate Saladette|Tercera / Chico'];
 
-  const rancho = prov('Rancho');
-  const donAle = prov('Don Ale');
-
-  const carga1Id = nuevoId();
-  const carga2Id = nuevoId();
-
   const cargas: Carga[] = [
     {
       id: carga1Id,
@@ -285,6 +296,8 @@ export function crearSemilla() {
       dispositivoId: 'servidor',
       creadoEnDispositivo: hace(480),
       cerradaEn: null,
+      comisionTipo: null,
+      comisionValor: null,
       renglones: [
         { cargaId: carga1Id, linea: 1, clasificacionId: cJitPri.id, cantidad: '50.00' },
         { cargaId: carga1Id, linea: 2, clasificacionId: cJitSeg.id, cantidad: '25.00' },
@@ -301,6 +314,8 @@ export function crearSemilla() {
       dispositivoId: 'servidor',
       creadoEnDispositivo: hace(360),
       cerradaEn: null,
+      comisionTipo: 'porcentaje',
+      comisionValor: '10.00',
       renglones: [
         { cargaId: carga2Id, linea: 1, clasificacionId: cJitPri.id, cantidad: '30.00' },
         { cargaId: carga2Id, linea: 2, clasificacionId: cJitSeg.id, cantidad: '10.00' },
@@ -383,12 +398,61 @@ export function crearSemilla() {
     { id: nuevoId(), tipo: 'egreso', categoria: 'pago_proveedor', concepto: 'Pago a proveedor · Agrícola San Juan', monto: '4000.00', metodo: 'transferencia', proveedorId: prov('Agrícola').id, usuarioNombre: rodolfo.nombre, creadoEn: hace(560) },
     { id: nuevoId(), tipo: 'egreso', categoria: 'flete', concepto: 'Flete de mercancía', monto: '800.00', metodo: 'efectivo', proveedorId: null, usuarioNombre: rodolfo.nombre, creadoEn: hace(600) },
     { id: nuevoId(), tipo: 'ingreso', categoria: 'renta', concepto: 'Renta de diablitos', monto: '300.00', metodo: 'efectivo', proveedorId: null, usuarioNombre: ana.nombre, creadoEn: haceDias(1, 13) },
+    { id: nuevoId(), tipo: 'egreso', categoria: 'pago_proveedor', concepto: 'Pago a proveedor · Don Ale', monto: '300.00', metodo: 'transferencia', proveedorId: donAle.id, usuarioNombre: rodolfo.nombre, creadoEn: hace(180) },
+    { id: nuevoId(), tipo: 'egreso', categoria: 'anticipo_productor', concepto: 'Anticipo a productor · Don Ale', monto: '100.00', metodo: 'efectivo', proveedorId: donAle.id, usuarioNombre: rodolfo.nombre, creadoEn: hace(300) },
   ];
+
+  const liquidacion1Id = nuevoId();
+  const liquidaciones: Liquidacion[] = [
+    {
+      id: liquidacion1Id,
+      folio: 1,
+      proveedorId: donAle.id,
+      periodoDesde: sumarDias(hoy, -7),
+      periodoHasta: hoy,
+      totalVendido: '680.00',
+      unidadesVendidas: '2.000',
+      comisionTipo: 'porcentaje',
+      comisionValor: '10.00',
+      comisionCalculada: '68.00',
+      comisionFinal: '68.00',
+      comisionNota: null,
+      descuentosTotal: '50.00',
+      neto: '562.00',
+      usuarioId: rodolfo.id,
+      usuarioNombre: rodolfo.nombre,
+      creadoEn: hace(240),
+    },
+  ];
+
+  const liquidacionRenglones: LiquidacionRenglon[] = [
+    {
+      liquidacionId: liquidacion1Id,
+      linea: 1,
+      ventaId: v120.id,
+      cargaId: carga2Id,
+      importe: '680.00',
+      unidades: '2.000',
+    },
+  ];
+
+  const liquidacionConceptos: LiquidacionConcepto[] = [
+    {
+      liquidacionId: liquidacion1Id,
+      linea: 1,
+      tipo: 'flete',
+      concepto: 'Flete de carga',
+      monto: '50.00',
+    },
+  ];
+
+  const ajustesProductor: AjusteProductor[] = [];
 
   const auditoria: AuditoriaServidor[] = [
     { id: nuevoId(), fecha: hace(120), usuarioNombre: carlos.nombre, categoria: 'pagos', descripcion: `${carlos.nombre} registró un pago de $1,000 de Abarrotes Doña Lupe` },
     { id: nuevoId(), fecha: hace(115), usuarioNombre: carlos.nombre, categoria: 'ventas', descripcion: `${carlos.nombre} registró la venta #000128` },
     { id: nuevoId(), fecha: hace(200), usuarioNombre: ana.nombre, categoria: 'ventas', descripcion: `${ana.nombre} canceló la venta #000124` },
+    { id: nuevoId(), fecha: hace(240), usuarioNombre: rodolfo.nombre, categoria: 'liquidaciones', descripcion: `${rodolfo.nombre} emitió el corte #L-0001 para Don Ale por neto de $562.00` },
     { id: nuevoId(), fecha: hace(420), usuarioNombre: ana.nombre, categoria: 'catalogo', descripcion: `${ana.nombre} cambió el precio de Jitomate Saladette Primera / Grande de $400 a $420` },
     { id: nuevoId(), fecha: hace(570), usuarioNombre: rodolfo.nombre, categoria: 'compras', descripcion: `${rodolfo.nombre} registró la compra #C-0045 de Agrícola San Juan` },
   ];
@@ -409,9 +473,13 @@ export function crearSemilla() {
     compras,
     movimientosInventario,
     movimientosDinero,
+    liquidaciones,
+    liquidacionRenglones,
+    liquidacionConceptos,
+    ajustesProductor,
     usuarios,
     roles,
     auditoria,
-    siguienteFolio: { venta: 129, compra: 46 },
+    siguienteFolio: { venta: 129, compra: 46, liquidacion: 2 },
   };
 }

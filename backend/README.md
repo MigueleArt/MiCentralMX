@@ -48,6 +48,7 @@ curl -X POST https://DOMINIO/api/plataforma/negocios -H "X-Plataforma-Token: $PL
 - Cancelación con movimiento inverso, ajuste por conteo, alta y archivado de producto, usuario suspendido, reportes e historial.
 - Cargas del día y asignación: una venta descuenta de su carga y del total general; aislamiento RLS en `cargas`, `carga_renglones` y `existencias_carga`; reenvío idempotente de la operación `carga`; cierre de carga resolviendo sobrantes (merma / devolución); control de permisos (`cargas.registrar`, `cargas.cerrar`).
 - Catálogo y unidades: edición masiva de precios del día (`PATCH /catalogo/precios`) y activación de decimales por unidad (`PATCH /catalogo/unidades/:id`).
+- Liquidaciones y cuenta de productores: comisión por porcentaje y por unidad; nota obligatoria cuando la comisión final difiere de la calculada; corte único por renglón de venta (incluso concurrente); neto con deducciones; saldo con pagos parciales y anticipos (incluido saldo negativo); estado de cortes con pagos acumulados mediante FIFO; cancelación de ventas ya cortadas generando cargo con tasa efectiva y retorno de fruta a la carga; RLS y control de permisos (`liquidaciones.ver` y `liquidaciones.gestionar`).
 
 ## Seguridad
 
@@ -88,6 +89,9 @@ Dockerfile     Imagen de la API (contexto: la raíz del repositorio)
 | `0003_intentos_login.sql` | Tabla del límite de intentos de login. |
 | `0004_conciliacion_existencias.sql` | Tabla `alertas_inventario` y función `conciliar_existencias()`. |
 | `0005_permisos_plataforma.sql` | Permisos de `mc_plataforma` para la tarea nocturna y tablas futuras. |
+| `0007_cargas.sql` | Cargas del día, existencias por carga, origen por proveedor y permisos `cargas.*`. |
+| `0008_cargas_ajustes.sql` | Ajustes de inventario por carga y asignación de merma a cargas abiertas. |
+| `0009_cuenta_productor.sql` | Comisiones en proveedores/cargas, liquidaciones, liquidacion_renglones, liquidacion_conceptos, ajustes_productor, categoría anticipo_productor, permisos `liquidaciones.*` y RLS forzado. |
 ```
 
 ## Bajada paginada

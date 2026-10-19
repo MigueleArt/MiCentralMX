@@ -571,6 +571,7 @@ suite('Cargas del día y asignación de inventario', () => {
     const res = await client.query("select id from cargas where usuario_nombre <> 'Rodolfo Hernández'");
     const testCargaIds: string[] = res.rows.map((r) => r.id);
     if (testCargaIds.length > 0) {
+      await client.query('delete from liquidacion_renglones where carga_id = any($1)', [testCargaIds]);
       await client.query('update venta_renglones set carga_id = null where carga_id = any($1)', [testCargaIds]);
       await client.query('delete from existencias_carga where carga_id = any($1)', [testCargaIds]);
       await client.query('delete from carga_renglones where carga_id = any($1)', [testCargaIds]);

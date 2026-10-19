@@ -398,10 +398,12 @@ async function aplicarMovimientoDinero(tx: Tx, datos: unknown, ctx: ContextoApli
   const m = parsear(esquemaMovimientoDinero, datos);
   const revision = [...ctx.revisionGeneral];
   let concepto = m.concepto.trim();
-  if (m.categoria === 'pago_proveedor') {
+  if (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor') {
     const [prov] = m.proveedorId ? await tx.select({ nombre: proveedores.nombre }).from(proveedores).where(eq(proveedores.id, m.proveedorId)) : [];
-    if (!prov) throw new Dependencia('El proveedor del pago no existe en el servidor.');
-    concepto = `Pago a proveedor · ${prov.nombre}`;
+    if (!prov) throw new Dependencia('El proveedor del pago o anticipo no existe en el servidor.');
+    if (!concepto) {
+      concepto = m.categoria === 'pago_proveedor' ? `Pago a proveedor · ${prov.nombre}` : `Anticipo a productor · ${prov.nombre}`;
+    }
   }
   if (!concepto) throw new Rechazo('El movimiento necesita un concepto.');
   const tipo = CATEGORIAS[m.categoria];
@@ -413,7 +415,8 @@ async function aplicarMovimientoDinero(tx: Tx, datos: unknown, ctx: ContextoApli
     concepto,
     monto: aImporte(m.monto),
     metodo: m.metodo,
-    proveedorId: m.categoria === 'pago_proveedor' ? m.proveedorId : null,
+    proveedorId: m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor' ? m.proveedorId : null,
+    compraId: m.compraId ?? null,
     usuarioId: autor.id,
     usuarioNombre: autor.nombre,
     creadoEn: new Date(m.creadoEn),

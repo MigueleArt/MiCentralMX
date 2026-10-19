@@ -57,37 +57,6 @@ export async function sembrar(url: string) {
       await tx.insert(t.clientes).values(s.clientes.map((c) => ({ ...c, negocioId, creadoEn: new Date(c.creadoEn), archivadoEn: null })));
       await tx.insert(t.proveedores).values(s.proveedores.map((p) => ({ ...p, negocioId, archivadoEn: null })));
 
-      for (const v of s.ventas) {
-        await tx.insert(t.ventas).values({
-          id: v.id,
-          negocioId,
-          folio: v.folio!,
-          folioProvisional: null,
-          clienteId: v.clienteId,
-          clienteNombre: v.clienteNombre,
-          formaPago: v.formaPago,
-          estado: v.estado,
-          total: v.total,
-          pagado: v.pagado,
-          venceEl: v.venceEl,
-          usuarioId: uid(v.usuarioId),
-          usuarioNombre: v.usuarioNombre,
-          dispositivoId: null,
-          creadoEnDispositivo: new Date(v.creadoEnDispositivo),
-          requiereRevision: false,
-          motivoRevision: null,
-          canceladaEn: v.canceladaEn ? new Date(v.canceladaEn) : null,
-        });
-        await tx.insert(t.ventaRenglones).values(v.renglones.map((x, linea) => ({ ...x, ventaId: v.id, linea, negocioId })));
-      }
-      for (const p of s.pagos) {
-        await tx.insert(t.pagos).values({ ...p, negocioId, usuarioId: uid(p.usuarioId), creadoEnDispositivo: new Date(p.creadoEnDispositivo) });
-        await tx.insert(t.pagoAplicaciones).values(p.aplicaciones.map((a) => ({ ...a, pagoId: p.id, negocioId })));
-      }
-      for (const c of s.compras) {
-        await tx.insert(t.compras).values({ ...c, folio: c.folio!, negocioId, usuarioId: uid(c.usuarioId), creadoEnDispositivo: new Date(c.creadoEnDispositivo) });
-        await tx.insert(t.compraRenglones).values(c.renglones.map((x, linea) => ({ ...x, compraId: c.id, linea, negocioId })));
-      }
       if (s.cargas?.length) {
         for (const cg of s.cargas) {
           await tx.insert(t.cargas).values({
@@ -124,13 +93,72 @@ export async function sembrar(url: string) {
           });
         }
       }
+
+      for (const v of s.ventas) {
+        await tx.insert(t.ventas).values({
+          id: v.id,
+          negocioId,
+          folio: v.folio!,
+          folioProvisional: null,
+          clienteId: v.clienteId,
+          clienteNombre: v.clienteNombre,
+          formaPago: v.formaPago,
+          estado: v.estado,
+          total: v.total,
+          pagado: v.pagado,
+          venceEl: v.venceEl,
+          usuarioId: uid(v.usuarioId),
+          usuarioNombre: v.usuarioNombre,
+          dispositivoId: null,
+          creadoEnDispositivo: new Date(v.creadoEnDispositivo),
+          requiereRevision: false,
+          motivoRevision: null,
+          canceladaEn: v.canceladaEn ? new Date(v.canceladaEn) : null,
+        });
+        await tx.insert(t.ventaRenglones).values(v.renglones.map((x, linea) => ({ ...x, ventaId: v.id, linea, negocioId })));
+      }
+      for (const p of s.pagos) {
+        await tx.insert(t.pagos).values({ ...p, negocioId, usuarioId: uid(p.usuarioId), creadoEnDispositivo: new Date(p.creadoEnDispositivo) });
+        await tx.insert(t.pagoAplicaciones).values(p.aplicaciones.map((a) => ({ ...a, pagoId: p.id, negocioId })));
+      }
+      for (const c of s.compras) {
+        await tx.insert(t.compras).values({ ...c, folio: c.folio!, negocioId, usuarioId: uid(c.usuarioId), creadoEnDispositivo: new Date(c.creadoEnDispositivo) });
+        await tx.insert(t.compraRenglones).values(c.renglones.map((x, linea) => ({ ...x, compraId: c.id, linea, negocioId })));
+      }
       await tx.insert(t.movimientosInventario).values(s.movimientosInventario.map((m) => ({ ...m, negocioId, usuarioId: null, creadoEn: new Date(m.creadoEn) })));
       await tx.insert(t.movimientosDinero).values(s.movimientosDinero.map((m) => ({ ...m, negocioId, usuarioId: null, creadoEn: new Date(m.creadoEn) })));
+      if (s.liquidaciones?.length) {
+        for (const l of s.liquidaciones) {
+          await tx.insert(t.liquidaciones).values({
+            ...l,
+            negocioId,
+            usuarioId: uid(l.usuarioId),
+            creadoEn: new Date(l.creadoEn),
+          });
+        }
+      }
+      if (s.liquidacionRenglones?.length) {
+        await tx.insert(t.liquidacionRenglones).values(s.liquidacionRenglones.map((r) => ({ ...r, negocioId })));
+      }
+      if (s.liquidacionConceptos?.length) {
+        await tx.insert(t.liquidacionConceptos).values(s.liquidacionConceptos.map((c) => ({ ...c, negocioId })));
+      }
+      if (s.ajustesProductor?.length) {
+        await tx.insert(t.ajustesProductor).values(
+          s.ajustesProductor.map((a) => ({
+            ...a,
+            negocioId,
+            usuarioId: uid(a.usuarioId),
+            creadoEn: new Date(a.creadoEn),
+          })),
+        );
+      }
       await tx.insert(t.auditoria).values(s.auditoria.map((a) => ({ ...a, negocioId, fecha: new Date(a.fecha) })));
       // Los siguientes bloques de folios empiezan después de los usados en la semilla.
       await tx.insert(t.contadores).values([
         { negocioId, clave: 'folio_venta', valor: s.siguienteFolio.venta - 1 },
         { negocioId, clave: 'folio_compra', valor: s.siguienteFolio.compra - 1 },
+        { negocioId, clave: 'folio_liquidacion', valor: (s.siguienteFolio.liquidacion ?? 2) - 1 },
       ]);
     });
     return negocioId;

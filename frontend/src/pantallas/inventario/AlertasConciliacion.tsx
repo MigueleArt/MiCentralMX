@@ -52,6 +52,7 @@ export function AlertasConciliacion() {
       <Link to="/inventario/mermas">ajuste</Link>.
       <span className="pila" style={{ marginTop: 10, gap: 8 }}>
         {lista.map((a) => {
+          const esCargaExcede = a.tipo === 'carga_excede_total';
           const dif = D(a.existencia).minus(a.sumaMovimientos);
           return (
             <span key={a.id} className="fila-entre" style={{ flexWrap: 'wrap', gap: 8 }}>
@@ -59,14 +60,26 @@ export function AlertasConciliacion() {
                 <Link to={`/inventario/${a.productoId}`} style={{ fontWeight: 600 }}>
                   {a.descripcion}
                 </Link>
-                <span className="num" style={{ display: 'block', fontSize: 13 }}>
-                  Guardada {formatoCantidad(a.existencia)} · historial {formatoCantidad(a.sumaMovimientos)} {a.unidadPlural} ({dif.isPositive() ? '+' : '−'}
-                  {formatoCantidad(dif.abs())})
-                </span>
+                {esCargaExcede ? (
+                  <span style={{ display: 'block', fontSize: 13, color: 'var(--peligro, #b91c1c)' }}>
+                    Las cargas suman más que el inventario total ({formatoCantidad(a.sumaMovimientos)} en cargas vs {formatoCantidad(a.existencia)} en existencia)
+                  </span>
+                ) : (
+                  <span className="num" style={{ display: 'block', fontSize: 13 }}>
+                    Guardada {formatoCantidad(a.existencia)} · historial {formatoCantidad(a.sumaMovimientos)} {a.unidadPlural} ({dif.isPositive() ? '+' : '−'}
+                    {formatoCantidad(dif.abs())})
+                  </span>
+                )}
               </span>
-              <button type="button" className="btn btn-s btn-sm" disabled={corregir.isPending} onClick={() => corregir.mutate(a.id)}>
-                Corregir con el historial
-              </button>
+              {esCargaExcede ? (
+                <Link to="/inventario/mermas" className="btn btn-s btn-sm">
+                  Corregir con merma o ajuste
+                </Link>
+              ) : (
+                <button type="button" className="btn btn-s btn-sm" disabled={corregir.isPending} onClick={() => corregir.mutate(a.id)}>
+                  Corregir con el historial
+                </button>
+              )}
             </span>
           );
         })}

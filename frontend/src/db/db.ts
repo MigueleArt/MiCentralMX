@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type {
+  AjusteProductor,
   Carga,
   Cliente,
   Clasificacion,
@@ -7,6 +8,9 @@ import type {
   ConfiguracionNegocio,
   Existencia,
   ExistenciaCarga,
+  Liquidacion,
+  LiquidacionConcepto,
+  LiquidacionRenglon,
   MovimientoDinero,
   MovimientoInventario,
   Negocio,
@@ -108,6 +112,10 @@ export class BaseLocal extends Dexie {
   compras!: EntityTable<CompraLocal, 'id'>;
   movimientosInventario!: EntityTable<MovimientoInventarioLocal, 'id'>;
   movimientosDinero!: EntityTable<MovimientoDineroLocal, 'id'>;
+  liquidaciones!: EntityTable<Liquidacion, 'id'>;
+  liquidacionRenglones!: EntityTable<LiquidacionRenglon, any>;
+  liquidacionConceptos!: EntityTable<LiquidacionConcepto, any>;
+  ajustesProductor!: EntityTable<AjusteProductor, 'id'>;
   operaciones!: EntityTable<OperacionLocal, 'operacionId'>;
   bloquesFolio!: EntityTable<BloqueFolioLocal, 'id'>;
 
@@ -153,6 +161,14 @@ export class BaseLocal extends Dexie {
             if (!p.tipo) p.tipo = 'tercero';
           });
       });
+
+    this.version(3).stores({
+      liquidaciones: '&id, folio, proveedorId, creadoEn',
+      liquidacionRenglones: '&[liquidacionId+ventaId+linea], liquidacionId, ventaId, cargaId',
+      liquidacionConceptos: '&[liquidacionId+linea], liquidacionId, tipo',
+      ajustesProductor: '&id, proveedorId, tipo, categoria, creadoEn',
+      movimientosDinero: '&id, creadoEn, operacionId, proveedorId, categoria',
+    });
   }
 
   async leerMeta<K extends ClaveMeta>(clave: K): Promise<Metadatos[K] | undefined> {
@@ -184,6 +200,10 @@ export class BaseLocal extends Dexie {
       this.compras,
       this.movimientosInventario,
       this.movimientosDinero,
+      this.liquidaciones,
+      this.liquidacionRenglones,
+      this.liquidacionConceptos,
+      this.ajustesProductor,
       this.operaciones,
       this.bloquesFolio,
     ];

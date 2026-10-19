@@ -10,3 +10,5 @@ export const formatoMXN = (v: Decimal.Value) => fmt.format(D(v).toNumber());
 
 export const folioVenta = (f: number) => `#${String(f).padStart(6, '0')}`;
 export const folioCompra = (f: number) => `#C-${String(f).padStart(4, '0')}`;
+export const folioLiquidacion = (f: number) => `#L-${String(f).padStart(4, '0')}`;
+

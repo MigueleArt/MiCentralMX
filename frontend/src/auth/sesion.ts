@@ -19,8 +19,13 @@ export class ErrorSesion extends Error {
   }
 }
 
-export const tienePermiso = (u: Pick<UsuarioSesion, 'permisos'> | null | undefined, p: Permiso) =>
-  !!u?.permisos.includes(p);
+export const tienePermiso = (
+  u: (Pick<UsuarioSesion, 'permisos'> & Partial<Pick<UsuarioSesion, 'rolBase'>>) | null | undefined,
+  p: Permiso,
+) => {
+  if (u?.rolBase === 'dueno') return true;
+  return !!u?.permisos?.includes(p);
+};
 
 export interface EstadoVentana {
   soloLectura: boolean;

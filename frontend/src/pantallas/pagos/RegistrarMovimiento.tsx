@@ -15,13 +15,25 @@ import { formatoMXN } from '../../lib/dinero';
 import { useConectividad } from '../../sync/conectividad';
 
 /** Registrar ingreso o egreso simple (funciona sin conexión). Complementa la pantalla 25. */
-export function RegistrarMovimiento({ alCerrar, alRegistrar }: { alCerrar: () => void; alRegistrar: (texto: string) => void }) {
+export function RegistrarMovimiento({
+  alCerrar,
+  alRegistrar,
+  proveedorIdInicial,
+  categoriaInicial,
+}: {
+  alCerrar: () => void;
+  alRegistrar: (texto: string) => void;
+  proveedorIdInicial?: string;
+  categoriaInicial?: CategoriaDinero;
+}) {
   const { soloLectura } = useSesionActiva();
   const { enLinea } = useConectividad();
   const proveedores = useProveedores() ?? [];
-  const [tipo, setTipo] = useState<'egreso' | 'ingreso'>('egreso');
-  const [categoria, setCategoria] = useState<CategoriaDinero>('pago_proveedor');
-  const [proveedorId, setProveedorId] = useState<string | null>(null);
+  const [tipo, setTipo] = useState<'egreso' | 'ingreso'>(
+    categoriaInicial && CATEGORIAS_DINERO[categoriaInicial]?.tipo === 'ingreso' ? 'ingreso' : 'egreso',
+  );
+  const [categoria, setCategoria] = useState<CategoriaDinero>(categoriaInicial ?? 'pago_proveedor');
+  const [proveedorId, setProveedorId] = useState<string | null>(proveedorIdInicial ?? null);
   const [concepto, setConcepto] = useState('');
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<MetodoPago>('efectivo');
@@ -47,6 +59,8 @@ export function RegistrarMovimiento({ alCerrar, alRegistrar }: { alCerrar: () =>
     }
   };
 
+  const esDeProveedor = categoria === 'pago_proveedor' || categoria === 'anticipo_productor';
+
   return (
     <HojaInferior titulo="Registrar movimiento" alCerrar={alCerrar}>
       <Segmentado<'egreso' | 'ingreso'>
@@ -64,9 +78,9 @@ export function RegistrarMovimiento({ alCerrar, alRegistrar }: { alCerrar: () =>
       <Campo etiqueta="Concepto" id="cat">
         <ElegirEnLista id="cat" titulo="Concepto" valor={categoria} opciones={categorias.map(([v, c]) => ({ valor: v, texto: c.nombre }))} alElegir={(v) => setCategoria(v as CategoriaDinero)} conBusqueda={false} />
       </Campo>
-      {categoria === 'pago_proveedor' ? (
-        <Campo etiqueta="Proveedor" id="prov" error={errores.proveedor}>
-          <ElegirEnLista id="prov" titulo="Proveedor" marcador="Elegir proveedor" valor={proveedorId} opciones={proveedores.map((p) => ({ valor: p.id, texto: p.nombre }))} alElegir={setProveedorId} invalido={!!errores.proveedor} />
+      {esDeProveedor ? (
+        <Campo etiqueta="Proveedor / Productor" id="prov" error={errores.proveedor}>
+          <ElegirEnLista id="prov" titulo="Proveedor / Productor" marcador="Elegir proveedor" valor={proveedorId} opciones={proveedores.map((p) => ({ valor: p.id, texto: p.nombre }))} alElegir={setProveedorId} invalido={!!errores.proveedor} />
         </Campo>
       ) : (
         <Campo etiqueta="Descripción" id="desc" opcional>

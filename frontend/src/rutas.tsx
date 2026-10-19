@@ -29,6 +29,9 @@ import DetalleCliente from './pantallas/clientes/DetalleCliente';
 import FormCliente from './pantallas/clientes/FormCliente';
 import Proveedores from './pantallas/proveedores/Proveedores';
 import FormProveedor from './pantallas/proveedores/FormProveedor';
+import DetalleProveedor from './pantallas/proveedores/DetalleProveedor';
+import NuevoCorte from './pantallas/proveedores/NuevoCorte';
+import NuevoAjusteProductor from './pantallas/proveedores/NuevoAjusteProductor';
 import Compras from './pantallas/compras/Compras';
 import NuevaCompra from './pantallas/compras/NuevaCompra';
 import Pagos from './pantallas/pagos/Pagos';
@@ -75,7 +78,18 @@ function Requiere({ permiso, children }: { permiso: Permiso; children: ReactNode
   );
 }
 
+function RequiereCualquiera({ permisos, children }: { permisos: Permiso[]; children: ReactNode }) {
+  const { puede } = useSesion();
+  if (permisos.some((p) => puede(p))) return children;
+  return (
+    <main className="pag-main" style={{ paddingTop: 24 }}>
+      <EstadoVacio icono={Lock} titulo="Sin permiso" texto="Tu rol no permite entrar a esta sección. Pide acceso al administrador." acciones={<Link className="btn btn-q" to="/">Ir a inicio</Link>} />
+    </main>
+  );
+}
+
 const con = (permiso: Permiso, el: ReactNode) => <Requiere permiso={permiso}>{el}</Requiere>;
+const conCualquiera = (permisos: Permiso[], el: ReactNode) => <RequiereCualquiera permisos={permisos}>{el}</RequiereCualquiera>;
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
@@ -108,9 +122,13 @@ export const router = createBrowserRouter([
           { path: 'clientes/nuevo', element: con('clientes.crear', <FormCliente />) },
           { path: 'clientes/:id', element: <DetalleCliente /> },
           { path: 'clientes/:id/editar', element: con('clientes.editar', <FormCliente />) },
-          { path: 'proveedores', element: con('compras.crear', <Proveedores />) },
+          { path: 'proveedores', element: conCualquiera(['compras.crear', 'proveedores.gestionar', 'liquidaciones.ver'], <Proveedores />) },
           { path: 'proveedores/nuevo', element: con('proveedores.gestionar', <FormProveedor />) },
+          { path: 'proveedores/:id', element: conCualquiera(['compras.crear', 'proveedores.gestionar', 'liquidaciones.ver'], <DetalleProveedor />) },
           { path: 'proveedores/:id/editar', element: con('proveedores.gestionar', <FormProveedor />) },
+          { path: 'proveedores/:id/corte/nuevo', element: con('liquidaciones.gestionar', <NuevoCorte />) },
+          { path: 'proveedores/:id/ajuste', element: con('liquidaciones.gestionar', <NuevoAjusteProductor />) },
+          { path: 'liquidaciones/nueva', element: con('liquidaciones.gestionar', <NuevoCorte />) },
           { path: 'compras', element: con('compras.crear', <Compras />) },
           { path: 'compras/nueva', element: con('compras.crear', <NuevaCompra />) },
           { path: 'pagos', element: <Pagos /> },

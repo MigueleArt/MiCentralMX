@@ -7,6 +7,9 @@ export const folioVenta = (v: Pick<Venta, 'folio' | 'folioProvisional'>): string
 export const folioCompra = (c: { folio: number | null; folioProvisional: string | null }): string =>
   c.folio != null ? `#C-${String(c.folio).padStart(4, '0')}` : (c.folioProvisional ?? 'sin folio');
 
+export const folioLiquidacion = (l: { folio: number | null }): string =>
+  l.folio != null ? `#L-${String(l.folio).padStart(4, '0')}` : 'sin folio';
+
 /** "5 cajas", "1 caja", "12.5 kg" */
 export function cantidadConUnidad(cantidad: string | number, unidad: { nombre: string; plural: string }): string {
   const n = Number(cantidad);
@@ -25,9 +28,11 @@ export const MOTIVOS_MERMA = ['Producto dañado', 'Maduración excesiva', 'Merma
 
 export const CATEGORIAS_DINERO = {
   pago_proveedor: { tipo: 'egreso', nombre: 'Pago a proveedor' },
+  anticipo_productor: { tipo: 'egreso', nombre: 'Anticipo a productor' },
   flete: { tipo: 'egreso', nombre: 'Flete de mercancía' },
   sueldo: { tipo: 'egreso', nombre: 'Sueldos' },
   otro_egreso: { tipo: 'egreso', nombre: 'Otro egreso' },
   renta: { tipo: 'ingreso', nombre: 'Renta' },
   otro_ingreso: { tipo: 'ingreso', nombre: 'Otro ingreso' },
 } as const;
+
