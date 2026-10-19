@@ -40,7 +40,7 @@ import type {
   UsuarioSesion,
   Venta,
 } from '@micentralmx/shared/entidades';
-import type { Permiso } from '@micentralmx/shared/permisos';
+import { ROLES_BASE, type Permiso } from '@micentralmx/shared/permisos';
 import { aImporte, D, formatoMXN, sumar } from '../lib/dinero';
 import { diaLocal, diferenciaDias } from '../lib/fechas';
 import { nuevoId } from '../lib/ids';
@@ -110,7 +110,25 @@ async function todos<T>(tabla: string): Promise<T[]> {
 }
 
 async function inicializar() {
-  if (await valor('inicializado')) return;
+  if (await valor('inicializado')) {
+    const roles = await todos<RolServidor>('roles');
+    for (const r of roles) {
+      if (r.base === 'dueno') {
+        const diff = ROLES_BASE.dueno.permisos.filter((p) => !r.permisos.includes(p));
+        if (diff.length > 0) {
+          r.permisos = [...ROLES_BASE.dueno.permisos];
+          await guardar('roles', r.id, r);
+        }
+      } else if (r.base === 'administrador') {
+        const diff = ROLES_BASE.administrador.permisos.filter((p) => !r.permisos.includes(p));
+        if (diff.length > 0) {
+          r.permisos = Array.from(new Set([...r.permisos, ...ROLES_BASE.administrador.permisos]));
+          await guardar('roles', r.id, r);
+        }
+      }
+    }
+    return;
+  }
   const s = crearSemilla();
   await fijarValor('negocio', s.negocio);
   await fijarValor('configuracion', s.configuracion);
