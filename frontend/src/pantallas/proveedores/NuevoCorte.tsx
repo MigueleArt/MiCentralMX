@@ -18,7 +18,7 @@ import { EncabezadoSecundario } from '../../layout/Encabezados';
 import { aImporte, D, formatoCantidad, formatoMXN, sumar } from '../../lib/dinero';
 import { diaLocal } from '../../lib/fechas';
 import { useConectividad } from '../../sync/conectividad';
-import type { ComisionTipo } from '@micentralmx/shared/entidades';
+import type { ComisionTipo, ComisionTipoBase } from '@micentralmx/shared/entidades';
 
 interface VentaPendienteApi {
   cargaId: string;
@@ -36,24 +36,26 @@ interface VentaPendienteApi {
 interface CargaInfoApi {
   id: string;
   fecha: string;
-  comisionTipo: ComisionTipo;
+  comisionTipo: ComisionTipoBase;
   comisionValor: string | null;
 }
 
 interface MermaSugeridaApi {
   id: string;
   cargaId: string | null;
-  productoNombre: string;
+  productoNombre?: string;
   clasificacionNombre: string;
   cantidad: string;
-  motivo: string;
-  creadoEn: string;
+  motivo?: string;
+  montoSugerido?: string;
+  creadoEn?: string;
 }
 
 interface DescuentoItem {
   tipo: 'flete' | 'tara' | 'merma' | 'otro';
   concepto: string;
   monto: string;
+  movimientoId?: string | null;
 }
 
 export default function NuevoCorte() {
@@ -72,7 +74,7 @@ export default function NuevoCorte() {
   const [datosPendientes, setDatosPendientes] = useState<{
     ventasPendientes: VentaPendienteApi[];
     cargas: CargaInfoApi[];
-    proveedor: { id: string; nombre: string; comisionTipo: ComisionTipo; comisionValor: string | null };
+    proveedor: { id: string; nombre: string; comisionTipo: ComisionTipoBase; comisionValor: string | null };
     anticiposEntregados: string;
     mermasSugeridas: MermaSugeridaApi[];
   } | null>(null);
@@ -100,10 +102,16 @@ export default function NuevoCorte() {
 
     api<any>('GET', `/liquidaciones/pendientes?proveedorId=${proveedorId}`)
       .then((res) => {
-        setDatosPendientes(res);
+        const ventas = (res.ventasPendientes ?? res.renglones ?? []) as VentaPendienteApi[];
+        const mermas = (res.mermasSugeridas ?? res.mermas ?? []) as MermaSugeridaApi[];
+        setDatosPendientes({
+          ...res,
+          ventasPendientes: ventas,
+          mermasSugeridas: mermas,
+        });
         // Pre-seleccionar todos
         const keys = new Set<string>();
-        for (const v of res.ventasPendientes as VentaPendienteApi[]) {
+        for (const v of ventas) {
           keys.add(`${v.ventaId}:${v.linea}`);
         }
         setRenglonesSeleccionados(keys);
@@ -200,8 +208,13 @@ export default function NuevoCorte() {
   const neto = totalVendido.minus(comisionFinalEfectiva).minus(totalDescuentos);
 
   // Agregar descuento
-  const agregarDescuento = (tipo: 'flete' | 'tara' | 'merma' | 'otro', concepto = '', monto = '') => {
-    setDescuentos([...descuentos, { tipo, concepto, monto }]);
+  const agregarDescuento = (
+    tipo: 'flete' | 'tara' | 'merma' | 'otro',
+    concepto = '',
+    monto = '',
+    movimientoId?: string | null,
+  ) => {
+    setDescuentos([...descuentos, { tipo, concepto, monto, movimientoId }]);
   };
 
   const quitarDescuento = (index: number) => {
@@ -218,6 +231,10 @@ export default function NuevoCorte() {
   const emitir = async () => {
     if (renglonesElegidos.length === 0) {
       setError('Debes incluir al menos un renglón de venta en el corte.');
+      return;
+    }
+    if (comisionFinalEfectiva.lt(0) || comisionFinalEfectiva.gt(totalVendido)) {
+      setError('La comisión final debe ser mayor o igual a 0 y menor o igual al total vendido.');
       return;
     }
     if (difiereComision && !comisionNota.trim()) {
@@ -248,6 +265,7 @@ export default function NuevoCorte() {
           tipo: d.tipo,
           concepto: d.concepto.trim() || d.tipo.toUpperCase(),
           monto: aImporte(d.monto),
+          movimientoId: d.tipo === 'merma' ? (d.movimientoId ?? null) : null,
         })),
     };
 
@@ -516,11 +534,13 @@ export default function NuevoCorte() {
                           onClick={() =>
                             agregarDescuento(
                               'merma',
-                              `Merma ${m.productoNombre} ${m.clasificacionNombre} (${formatoCantidad(m.cantidad)})`,
+                              `Merma ${m.clasificacionNombre} (${formatoCantidad(m.cantidad)})`,
+                              m.montoSugerido ?? '',
+                              m.id,
                             )
                           }
                         >
-                          + {m.productoNombre} ({formatoCantidad(m.cantidad)})
+                          + {m.clasificacionNombre} ({formatoCantidad(m.cantidad)})
                         </button>
                       ))}
                     </div>

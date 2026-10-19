@@ -205,7 +205,20 @@ export default function DetalleProveedor() {
 
           {/* Pestaña: Estado de Cuenta Cronológico */}
           {!esRancho && pestana === 'estado_cuenta' && (
-            <div className="card" style={{ overflow: 'hidden' }}>
+            <div className="pila-12">
+              <div
+                style={{
+                  padding: '8px 12px',
+                  background: 'var(--fondo-superficie, #f9fafb)',
+                  border: '1px solid var(--borde-tarjeta, #e5e7eb)',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  color: 'var(--texto-tenue)',
+                }}
+              >
+                Nota: Los pagos y anticipos cubren los cortes por orden de antigüedad (FIFO). Los cargos y abonos ajustan el saldo global de la cuenta, no el estado individual de cada corte.
+              </div>
+              <div className="card" style={{ overflow: 'hidden' }}>
               {movimientos.length === 0 ? (
                 <EstadoVacio
                   icono={FileSpreadsheet}
@@ -279,6 +292,20 @@ export default function DetalleProveedor() {
                               {m.estadoCorte.toUpperCase()}
                             </span>
                           )}
+                          {esCorte && (m as any).comisionTipo === 'mixta' && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                background: '#f3e8ff',
+                                color: '#7e22ce',
+                                fontWeight: 600,
+                              }}
+                            >
+                              MIXTA
+                            </span>
+                          )}
                         </div>
                         <p className="t-aux">{formatoDia(m.fecha)} · {formatoRelativo(m.fecha)}</p>
                       </div>
@@ -298,6 +325,7 @@ export default function DetalleProveedor() {
                   );
                 })
               )}
+              </div>
             </div>
           )}
 
@@ -337,9 +365,23 @@ export default function DetalleProveedor() {
                         >
                           {estado.toUpperCase()}
                         </span>
+                        {l.comisionTipo === 'mixta' && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: '#f3e8ff',
+                              color: '#7e22ce',
+                              fontWeight: 600,
+                            }}
+                          >
+                            MIXTA
+                          </span>
+                        )}
                       </div>
                       <p className="t-aux">
-                        Vendido: {formatoMXN(l.totalVendido)} · Comisión: {formatoMXN(l.comisionFinal)} · Cubierto: {formatoMXN(montoCubierto)}
+                        Vendido: {formatoMXN(l.totalVendido)} · Comisión {l.comisionTipo === 'mixta' ? '(mixta)' : ''}: {formatoMXN(l.comisionFinal)} · Cubierto: {formatoMXN(montoCubierto)}
                       </p>
                       <p className="t-aux" style={{ fontSize: 12 }}>
                         {formatoDia(l.creadoEn)}

@@ -401,7 +401,7 @@ async function aplicarMovimientoDinero(tx: Tx, datos: unknown, ctx: ContextoApli
   if (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor') {
     const [prov] = m.proveedorId ? await tx.select({ nombre: proveedores.nombre }).from(proveedores).where(eq(proveedores.id, m.proveedorId)) : [];
     if (!prov) throw new Dependencia('El proveedor del pago o anticipo no existe en el servidor.');
-    if (!concepto || m.categoria === 'pago_proveedor') {
+    if (!concepto) {
       concepto = m.categoria === 'pago_proveedor' ? `Pago a proveedor · ${prov.nombre}` : `Anticipo a productor · ${prov.nombre}`;
     }
   }
@@ -416,6 +416,7 @@ async function aplicarMovimientoDinero(tx: Tx, datos: unknown, ctx: ContextoApli
     monto: aImporte(m.monto),
     metodo: m.metodo,
     proveedorId: m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor' ? m.proveedorId : null,
+    compraId: m.compraId ?? null,
     usuarioId: autor.id,
     usuarioNombre: autor.nombre,
     creadoEn: new Date(m.creadoEn),

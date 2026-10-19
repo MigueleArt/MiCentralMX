@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, ne, notExists, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, notExists, sql } from 'drizzle-orm';
 import { Router } from 'express';
 import { z } from 'zod';
 import {
@@ -149,16 +149,22 @@ rutasLiquidaciones.get(
       )
       .orderBy(desc(movimientosInventario.creadoEn));
 
-    // Descontar mermas que ya hayan sido incluidas como conceptos de merma de este proveedor
-    const conceptosPrevios = await tx
-      .select({ concepto: liquidacionConceptos.concepto })
+    // Excluir mermas que ya hayan sido incluidas como conceptos de merma (por movimiento_id)
+    const mermasPrevias = await tx
+      .select({ movimientoId: liquidacionConceptos.movimientoId })
       .from(liquidacionConceptos)
       .innerJoin(liquidaciones, eq(liquidaciones.id, liquidacionConceptos.liquidacionId))
-      .where(and(eq(liquidaciones.negocioId, usuario.negocioId), eq(liquidaciones.proveedorId, proveedorId), eq(liquidacionConceptos.tipo, 'merma')));
-    const conceptosSet = new Set(conceptosPrevios.map((cp) => cp.concepto));
+      .where(
+        and(
+          eq(liquidaciones.negocioId, usuario.negocioId),
+          eq(liquidaciones.proveedorId, proveedorId),
+          isNotNull(liquidacionConceptos.movimientoId),
+        ),
+      );
+    const mermasCobradasSet = new Set(mermasPrevias.map((cp) => cp.movimientoId).filter(Boolean));
 
     const mermas = filasMermas
-      .filter((m) => !conceptosSet.has(`Merma: ${m.clasificacionNombre} (${m.motivo ?? 'merma'}) [${m.id}]`))
+      .filter((m) => !mermasCobradasSet.has(m.id))
       .map((m) => {
         const costoUnidad = m.ultimoCosto ?? m.precio;
         const montoSugerido = aImporte(D(m.cantidad).abs().mul(costoUnidad));
@@ -200,7 +206,9 @@ rutasLiquidaciones.get(
         comisionValor: c.comisionValor,
       })),
       renglones,
+      ventasPendientes: renglones,
       mermas,
+      mermasSugeridas: mermas,
       anticiposEntregados,
     };
   }),
@@ -212,7 +220,7 @@ const esquemaEmision = z.object({
   periodoDesde: z.string().nullable().optional(),
   periodoHasta: z.string().nullable().optional(),
   renglones: z.array(z.object({ ventaId: z.uuid(), linea: z.number().int().min(0) })).min(1, 'Selecciona al menos un renglón.'),
-  comisionTipo: z.enum(['porcentaje', 'por_unidad']),
+  comisionTipo: z.enum(['porcentaje', 'por_unidad', 'mixta']),
   comisionValor: decimal,
   comisionFinal: decimal,
   comisionNota: z.string().max(500).nullable().optional(),
@@ -222,6 +230,7 @@ const esquemaEmision = z.object({
         tipo: z.enum(['flete', 'tara', 'merma', 'otro']),
         concepto: z.string().trim().min(1, 'El concepto no puede estar vacío.').max(200),
         monto: decimal,
+        movimientoId: z.string().uuid().nullable().optional(),
       }),
     )
     .default([]),
@@ -236,8 +245,23 @@ rutasLiquidaciones.post(
     if (!prov) throw noEncontrado('El productor no existe.');
     if (prov.tipo === 'rancho_propio') throw conflicto('Los ranchos propios no generan liquidaciones.');
 
-    // Verificar renglones solicitados
+    // Verificar renglones solicitados y bloquear las ventas con FOR UPDATE
     const ventaIds = [...new Set(b.renglones.map((r) => r.ventaId))];
+    const ventasBloqueadas = await tx
+      .select({ id: ventas.id, estado: ventas.estado, folio: ventas.folio })
+      .from(ventas)
+      .where(and(eq(ventas.negocioId, usuario.negocioId), inArray(ventas.id, ventaIds)))
+      .for('update');
+
+    const mapaVentas = new Map(ventasBloqueadas.map((v) => [v.id, v]));
+    for (const vId of ventaIds) {
+      const v = mapaVentas.get(vId);
+      if (!v) throw noEncontrado('Una de las ventas no existe.');
+      if (v.estado === 'cancelada') {
+        throw conflicto(`La venta ${folioVenta(v.folio)} está cancelada.`);
+      }
+    }
+
     const filasVenta = await tx
       .select({
         ventaId: ventaRenglones.ventaId,
@@ -290,7 +314,9 @@ rutasLiquidaciones.post(
       }
       const vr = mapaRenglonesDisponibles.get(clave);
       if (!vr) throw noEncontrado(`El renglón ${sol.linea} de la venta no existe.`);
-      if (vr.estadoVenta === 'cancelada') throw conflicto(`La venta ${folioVenta(vr.folioVenta)} está cancelada.`);
+      if (vr.estadoVenta === 'cancelada' || mapaVentas.get(vr.ventaId)?.estado === 'cancelada') {
+        throw conflicto(`La venta ${folioVenta(vr.folioVenta)} está cancelada.`);
+      }
       if (vr.proveedorIdCarga !== b.proveedorId) throw conflicto(`El renglón de la venta ${folioVenta(vr.folioVenta)} no pertenece a este productor.`);
 
       const comTipo = (vr.comisionTipoCarga ?? prov.comisionTipo ?? b.comisionTipo) as 'porcentaje' | 'por_unidad';
@@ -334,16 +360,28 @@ rutasLiquidaciones.post(
       }
     }
 
+    const totalVendido = aImporte(totalVendidoD);
+    const unidadesVendidas = aCantidad(unidadesVendidasD);
     const comisionCalculada = aImporte(comisionCalculadaD);
     const comisionFinal = aImporte(b.comisionFinal);
+
+    // Validar comision_final >= 0 y <= total_vendido
+    if (D(comisionFinal).lt(0) || D(comisionFinal).gt(totalVendidoD)) {
+      throw new ErrorHttp(422, 'La comisión final debe ser mayor o igual a 0 y menor o igual al total vendido.', 'comision_invalida');
+    }
 
     // Si la comisión final difiere de la calculada, comision_nota es obligatoria
     if (!D(comisionFinal).equals(D(comisionCalculada)) && !b.comisionNota?.trim()) {
       throw new ErrorHttp(400, 'La nota de comisión es obligatoria cuando la comisión final difiere de la calculada.', 'nota_obligatoria');
     }
 
-    const totalVendido = aImporte(totalVendidoD);
-    const unidadesVendidas = aCantidad(unidadesVendidasD);
+    // Si hay más de una comisión distinta entre las cargas, marcar comision_tipo como 'mixta'
+    const configsComision = new Set<string>();
+    for (const c of porCarga.values()) {
+      configsComision.add(`${c.tipo}:${c.valor}`);
+    }
+    const comisionTipoGuardar = configsComision.size > 1 ? 'mixta' : b.comisionTipo;
+
     const descuentosTotal = aImporte(sumar(b.conceptos.map((c) => D(c.monto))));
     const neto = aImporte(D(totalVendido).minus(D(comisionFinal)).minus(D(descuentosTotal)));
 
@@ -362,8 +400,8 @@ rutasLiquidaciones.post(
         periodoHasta: b.periodoHasta ?? null,
         totalVendido,
         unidadesVendidas,
-        comisionTipo: b.comisionTipo,
-        comisionValor: aImporte(b.comisionValor),
+        comisionTipo: comisionTipoGuardar,
+        comisionValor: comisionTipoGuardar === 'mixta' ? '0.00' : aImporte(b.comisionValor),
         comisionCalculada,
         comisionFinal,
         comisionNota: b.comisionNota?.trim() || null,
@@ -398,17 +436,29 @@ rutasLiquidaciones.post(
       throw e;
     }
 
-    // Insertar conceptos
+    // Insertar conceptos guardando movimientoId para mermas
     const conceptosInsertar = b.conceptos.map((c, idx) => ({
       liquidacionId,
       linea: idx + 1,
       tipo: c.tipo,
       concepto: c.concepto.trim(),
       monto: aImporte(c.monto),
+      movimientoId: c.tipo === 'merma' ? (c.movimientoId ?? null) : null,
       negocioId: usuario.negocioId,
     }));
     if (conceptosInsertar.length > 0) {
-      await tx.insert(liquidacionConceptos).values(conceptosInsertar);
+      try {
+        await tx.insert(liquidacionConceptos).values(conceptosInsertar);
+      } catch (e: any) {
+        if (
+          e?.code === '23505' ||
+          e?.constraint?.includes('movimiento_id') ||
+          e?.message?.includes('movimiento_id')
+        ) {
+          throw conflicto('Una o más mermas ya fue incluida en otra liquidación.');
+        }
+        throw e;
+      }
     }
 
     await registrarAuditoria(
@@ -434,11 +484,13 @@ rutasLiquidaciones.post(
         unidades: r.unidades,
       })),
       conceptosInsertar.map((c) => ({
+        id: `${liquidacionId}:${c.linea}`,
         liquidacionId,
         linea: c.linea,
         tipo: c.tipo,
         concepto: c.concepto,
         monto: c.monto,
+        movimientoId: c.movimientoId,
       })),
     );
 
@@ -536,7 +588,7 @@ rutasLiquidaciones.get(
       .where(and(eq(liquidaciones.negocioId, usuario.negocioId), eq(liquidaciones.proveedorId, proveedorId)))
       .orderBy(asc(liquidaciones.creadoEn));
 
-    // Pagos y anticipos
+    // Pagos y anticipos de la cuenta de consigna del productor (se excluyen pagos ligados a compras)
     const pagosMovimientos = await tx
       .select()
       .from(movimientosDinero)
@@ -545,6 +597,8 @@ rutasLiquidaciones.get(
           eq(movimientosDinero.negocioId, usuario.negocioId),
           eq(movimientosDinero.proveedorId, proveedorId),
           inArray(movimientosDinero.categoria, ['pago_proveedor', 'anticipo_productor']),
+          isNull(movimientosDinero.compraId),
+          sql`not (${movimientosDinero.concepto} ilike '%compra%')`,
         ),
       )
       .orderBy(asc(movimientosDinero.creadoEn));
@@ -591,6 +645,7 @@ rutasLiquidaciones.get(
       montoPagadoCorte?: string;
       montoPendienteCorte?: string;
       usuarioNombre: string;
+      comisionTipo?: string;
     }
 
     const eventos: EventoTimeline[] = [];
@@ -610,6 +665,7 @@ rutasLiquidaciones.get(
         montoPagadoCorte: ec?.pagado,
         montoPendienteCorte: ec?.pendiente,
         usuarioNombre: c.usuarioNombre,
+        comisionTipo: c.comisionTipo,
       });
     }
 
@@ -658,6 +714,7 @@ rutasLiquidaciones.get(
         saldo: aImporte(saldoCorrido),
         folio: ev.folio,
         estadoCorte: ev.estadoCorte,
+        comisionTipo: ev.comisionTipo,
         montoPagadoCorte: ev.montoPagadoCorte,
         montoPendienteCorte: ev.montoPendienteCorte,
         usuarioNombre: ev.usuarioNombre,
@@ -677,6 +734,10 @@ rutasLiquidaciones.get(
         liquidacion: c,
         folio: c.folio,
         neto: c.neto,
+        comisionTipo: c.comisionTipo,
+        comisionValor: c.comisionValor,
+        comisionFinal: c.comisionFinal,
+        totalVendido: c.totalVendido,
         estado: ec?.estado ?? 'pendiente',
         montoCubierto: ec?.pagado ?? '0.00',
         montoPendiente: ec?.pendiente ?? c.neto,
@@ -741,7 +802,11 @@ rutasLiquidaciones.get(
       const { rows: rDinero } = await tx.execute<{ pagos: string; anticipos: string }>(
         sql`select coalesce(sum(case when categoria = 'pago_proveedor' then monto else 0 end), 0)::text as pagos,
                    coalesce(sum(case when categoria = 'anticipo_productor' then monto else 0 end), 0)::text as anticipos
-            from movimientos_dinero where negocio_id = ${usuario.negocioId} and proveedor_id = ${p.id}`,
+            from movimientos_dinero
+            where negocio_id = ${usuario.negocioId}
+              and proveedor_id = ${p.id}
+              and compra_id is null
+              and concepto not ilike '%compra%'`,
       );
 
       const netos = D(rLiq[0]?.total ?? 0);
@@ -776,7 +841,7 @@ const esquemaComisionCarga = z.object({
 
 rutasLiquidaciones.patch(
   '/cargas/:id/comision',
-  rutaNegocio('cargas.registrar', async ({ tx, usuario, req }) => {
+  rutaNegocio('liquidaciones.gestionar', async ({ tx, usuario, req }) => {
     const cargaId = z.uuid().parse(req.params.id);
     const b = esquemaComisionCarga.parse(req.body);
 

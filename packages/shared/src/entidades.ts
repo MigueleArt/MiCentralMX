@@ -53,7 +53,8 @@ export interface Cliente {
 
 export type TipoProveedor = 'tercero' | 'rancho_propio';
 
-export type ComisionTipo = 'porcentaje' | 'por_unidad';
+export type ComisionTipoBase = 'porcentaje' | 'por_unidad';
+export type ComisionTipo = 'porcentaje' | 'por_unidad' | 'mixta';
 
 export interface Proveedor {
   id: string;
@@ -61,7 +62,7 @@ export interface Proveedor {
   telefono: string | null;
   productos: string;
   tipo: TipoProveedor;
-  comisionTipo?: ComisionTipo | null;
+  comisionTipo?: ComisionTipoBase | null;
   comisionValor?: string | null;
   archivadoEn: string | null;
 }
@@ -82,7 +83,7 @@ export interface Carga {
   proveedorNombre?: string;
   proveedorTipo?: TipoProveedor;
   estado: EstadoCarga;
-  comisionTipo?: ComisionTipo | null;
+  comisionTipo?: ComisionTipoBase | null;
   comisionValor?: string | null;
   renglones: RenglonCarga[];
   usuarioId: string;
@@ -216,6 +217,7 @@ export interface MovimientoDinero {
   monto: string;
   metodo: MetodoPago;
   proveedorId: string | null;
+  compraId?: string | null;
   usuarioNombre: string;
   creadoEn: string;
 }
@@ -261,6 +263,7 @@ export interface LiquidacionConcepto {
   tipo: TipoConceptoLiquidacion;
   concepto: string;
   monto: string;
+  movimientoId?: string | null;
 }
 
 export interface Liquidacion {

@@ -168,7 +168,11 @@ rutasConsultas.get(
       const { rows: rDinero } = await tx.execute<{ pagos: string; anticipos: string }>(
         sql`select coalesce(sum(case when categoria = 'pago_proveedor' then monto else 0 end), 0)::text as pagos,
                    coalesce(sum(case when categoria = 'anticipo_productor' then monto else 0 end), 0)::text as anticipos
-            from movimientos_dinero where negocio_id = ${usuario.negocioId} and proveedor_id = ${p.id}`,
+            from movimientos_dinero
+            where negocio_id = ${usuario.negocioId}
+              and proveedor_id = ${p.id}
+              and compra_id is null
+              and concepto not ilike '%compra%'`,
       );
       const saldo = D(rLiq[0]?.total ?? 0)
         .plus(rAjuste[0]?.abonos ?? 0)

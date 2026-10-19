@@ -80,6 +80,7 @@ export const esquemaMovimientoDinero = z.object({
   monto: decimal,
   metodo: z.enum(['efectivo', 'transferencia', 'otro']),
   proveedorId: id.nullable(),
+  compraId: id.nullable().optional(),
   creadoEn: fecha,
 });
 

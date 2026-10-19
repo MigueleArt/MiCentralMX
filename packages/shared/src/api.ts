@@ -25,6 +25,7 @@ import type {
   LiquidacionConcepto,
   AjusteProductor,
   ComisionTipo,
+  ComisionTipoBase,
   TipoConceptoLiquidacion,
   TipoAjusteProductor,
   CategoriaAjusteProductor,
@@ -290,6 +291,7 @@ export interface SolicitudLiquidacion {
     tipo: TipoConceptoLiquidacion;
     concepto: string;
     monto: string;
+    movimientoId?: string | null;
   }>;
 }
 
@@ -315,6 +317,7 @@ export interface ItemEstadoCuenta {
   neto?: string;
   totalVendido?: string;
   comisionFinal?: string;
+  comisionTipo?: ComisionTipo;
   referenciaId?: string;
 }
 
@@ -338,7 +341,7 @@ export interface RenglonPendienteLiquidacion {
   importe: string;
   cargaId: string;
   cargaFecha: string;
-  comisionTipoCarga?: ComisionTipo | null;
+  comisionTipoCarga?: ComisionTipoBase | null;
   comisionValorCarga?: string | null;
 }
 
@@ -402,6 +405,7 @@ export interface DatosCrearLiquidacion {
     tipo: 'flete' | 'tara' | 'merma' | 'otro';
     concepto: string;
     monto: string;
+    movimientoId?: string | null;
   }>;
 }
 

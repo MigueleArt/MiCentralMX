@@ -203,6 +203,7 @@ export const movimientoDinero = (r: Fila<typeof e.movimientosDinero>): Movimient
   monto: r.monto,
   metodo: r.metodo,
   proveedorId: r.proveedorId,
+  compraId: r.compraId ?? null,
   usuarioNombre: r.usuarioNombre,
   creadoEn: r.creadoEn.toISOString(),
 });
@@ -224,6 +225,7 @@ export const liquidacionConcepto = (r: Fila<typeof e.liquidacionConceptos>): Liq
   tipo: r.tipo,
   concepto: r.concepto,
   monto: r.monto,
+  movimientoId: r.movimientoId ?? null,
 });
 
 export const liquidacion = (

@@ -727,6 +727,8 @@ export async function saldosProductoresLocales(): Promise<SaldoProductorVista[]>
       (m) =>
         m.proveedorId === p.id &&
         (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor') &&
+        !m.compraId &&
+        !m.concepto?.toLowerCase().includes('compra') &&
         (!m.operacionId || porId.get(m.operacionId)?.estado !== 'rechazada'),
     );
 
@@ -769,6 +771,8 @@ export async function estadoCuentaProductorLocal(proveedorId: string): Promise<E
     (m) =>
       m.proveedorId === proveedorId &&
       (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor') &&
+      !m.compraId &&
+      !m.concepto?.toLowerCase().includes('compra') &&
       (!m.operacionId || porId.get(m.operacionId)?.estado !== 'rechazada'),
   );
 

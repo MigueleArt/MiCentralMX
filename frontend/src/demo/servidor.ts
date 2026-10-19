@@ -1074,7 +1074,11 @@ ruta('GET', '/proveedores/:id/estado-cuenta', async ({ params, usuario }) => {
   cortes.sort((a, b) => new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime());
 
   const dinero = (await todos<MovimientoDinero>('movimientosDinero')).filter(
-    (m) => m.proveedorId === proveedorId && (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor'),
+    (m) =>
+      m.proveedorId === proveedorId &&
+      (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor') &&
+      !m.compraId &&
+      !m.concepto?.toLowerCase().includes('compra'),
   );
   dinero.sort((a, b) => new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime());
 
@@ -1194,7 +1198,17 @@ ruta('GET', '/proveedores/saldos', async ({ usuario }) => {
     const liqNeto = sumar(cortes.filter((c) => c.proveedorId === p.id).map((c) => D(c.neto)));
     const abonos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'abono').map((a) => D(a.monto)));
     const cargos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'cargo').map((a) => D(a.monto)));
-    const pagos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'pago_proveedor').map((d) => D(d.monto)));
+    const pagos = sumar(
+      dinero
+        .filter(
+          (d) =>
+            d.proveedorId === p.id &&
+            d.categoria === 'pago_proveedor' &&
+            !d.compraId &&
+            !d.concepto?.toLowerCase().includes('compra'),
+        )
+        .map((d) => D(d.monto)),
+    );
     const anticipos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'anticipo_productor').map((d) => D(d.monto)));
 
     const saldo = liqNeto.plus(abonos).minus(cargos).minus(pagos).minus(anticipos);
@@ -1212,7 +1226,7 @@ ruta('GET', '/proveedores/saldos', async ({ usuario }) => {
 });
 
 ruta('PATCH', '/cargas/:id/comision', async ({ cuerpo, params, usuario }) => {
-  const e = exigir(usuario, await permisos(usuario), 'cargas.registrar');
+  const e = exigir(usuario, await permisos(usuario), 'liquidaciones.gestionar');
   if (e) return e;
   const carga = await obtener<Carga>('cargas', params[0]);
   if (!carga) return error(404, 'La carga no existe.');
@@ -1246,7 +1260,17 @@ ruta('GET', '/reportes/productores', async ({ query, usuario }) => {
     const liqNeto = sumar(cortes.filter((c) => c.proveedorId === p.id).map((c) => D(c.neto)));
     const abonos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'abono').map((a) => D(a.monto)));
     const cargos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'cargo').map((a) => D(a.monto)));
-    const pagos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'pago_proveedor').map((d) => D(d.monto)));
+    const pagos = sumar(
+      dinero
+        .filter(
+          (d) =>
+            d.proveedorId === p.id &&
+            d.categoria === 'pago_proveedor' &&
+            !d.compraId &&
+            !d.concepto?.toLowerCase().includes('compra'),
+        )
+        .map((d) => D(d.monto)),
+    );
     const anticipos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'anticipo_productor').map((d) => D(d.monto)));
     const saldo = liqNeto.plus(abonos).minus(cargos).minus(pagos).minus(anticipos);
     if (saldo.gt(0)) porPagarTotalD = porPagarTotalD.plus(saldo);
