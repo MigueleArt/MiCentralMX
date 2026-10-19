@@ -4,6 +4,7 @@ PWA para bodegas de la central de abasto: ventas de contado y a crédito, cobran
 
 | Documento | Para qué |
 |---|---|
+| [`GUIA_DESARROLLO.md`](GUIA_DESARROLLO.md) | **Guía paso a paso**: cómo correr PostgreSQL real, API y PWA sin modo demo, usuarios de prueba y flujos a validar. |
 | Este archivo, [sección 5](#5-reglas-del-negocio-y-funcionamiento) | Reglas aprobadas: folios, stock, sesión offline, sincronización, revisiones, conciliación y seguridad. **Léela antes de cambiar la lógica.** |
 | [`frontend/README.md`](frontend/README.md) | PWA: comandos, estructura y mapa de las 43 pantallas a sus archivos. |
 | [`backend/README.md`](backend/README.md) | API: puesta en marcha, pruebas, seguridad, bajada paginada y conciliación. |
@@ -57,29 +58,26 @@ npm run dev:demo
 
 Aparece un banner de "Modo demostración". Los datos viven solo en ese navegador.
 
-### Opción B · Frontend + backend + PostgreSQL (desarrollo completo)
+### Opción B · Frontend + backend + PostgreSQL (desarrollo completo sin modo demo)
 
-1. **Base de datos.** En esta máquina ya existe un PostgreSQL de desarrollo en `C:\Users\eduar\AppData\Local\Temp\mcpg`, puerto **5433**, ya migrado y con datos de prueba. Para encenderlo:
+Consulta la **[`GUIA_DESARROLLO.md`](GUIA_DESARROLLO.md)** para la explicación detallada paso a paso.
 
-   ```powershell
-   & "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" -D "C:\Users\eduar\AppData\Local\Temp\mcpg" -o "-p 5433" start
+1. **Base de datos.** Asegúrate de tener PostgreSQL corriendo localmente en el puerto 5432 o el configurado en `backend/.env`. Aplica roles y migraciones:
+   ```bash
+   npm run db:migrar --workspace backend
+   npm run db:semilla --workspace backend
    ```
 
-   Para apagarlo, el mismo comando con `stop`. Está en una carpeta temporal: si se borra, créalo de nuevo con los pasos de [`backend/README.md`](backend/README.md).
-
-2. **API** (usa `backend/.env`, ya configurado para ese PostgreSQL):
-
+2. **API Backend**:
    ```bash
-   npm install          # en la raíz, si no lo has hecho
    cd backend
    npm run dev          # http://localhost:3000/api
    ```
 
-3. **PWA** (Vite manda `/api` a `localhost:3000`):
-
+3. **PWA Frontend** (conecta a la API real):
    ```bash
    cd frontend
-   npm run dev
+   npm run dev          # http://localhost:5173 (NO dev:demo)
    ```
 
 **Para empezar de cero en otro equipo:** crea los roles con `database/inicial/01_roles.sql` y copia `backend/.env.example` a `backend/.env`. Luego corre `npm run db:migrar` y `npm run db:semilla`. El detalle está en [`backend/README.md`](backend/README.md).
@@ -160,18 +158,20 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 - Permisos: `cargas.registrar` y `cargas.cerrar` (el Trabajador no los tiene por omisión).
 - Decimales en unidades: unidades como 'tara' permiten decimales (`permite_decimales = true`), configurables en línea.
 
-**Liquidaciones a productores, comisiones y cuenta corriente (Fase 2)**
+**Liquidaciones a productores, comisiones y cuenta corriente (Fase 2 y Sprint 3)**
 - **Consigna y ranchos propios:** La fruta de productores externos se vende en consigna y los ranchos propios no generan cuenta por pagar (`saldo = 0`).
-- **Comisión flexible:** Puede ser porcentaje de lo vendido (`total_vendido × valor / 100`) o por unidad (`unidades_vendidas × valor`). Se define por omisión en el productor y puede sobrescribirse en la carga mientras no tenga renglones liquidados. Si varias cargas entran al mismo corte, se calcula por carga y se suma. Al emitir el corte, la comisión final es editable pero exige nota obligatoria si difiere de la calculada.
-- **Cortes de cuenta (Liquidaciones):** Inmutables una vez emitidos, con folio consecutivo propio (`#L-0001`). Exigen conexión a Internet. Total vendido, unidades vendidas, comisiones, conceptos de descuento y neto a liquidar.
+- **Comisión flexible y mixta:** Puede ser porcentaje de lo vendido (`total_vendido × valor / 100`) o por unidad (`unidades_vendidas × valor`). Se define por omisión en el productor y puede sobrescribirse en la carga mientras no tenga renglones liquidados (`PATCH /cargas/:id/comision` exige `liquidaciones.gestionar`). Si varias cargas con comisiones distintas entran al mismo corte, se calcula por carga, se suma y se clasifica automáticamente como `'mixta'`, mostrándose en el estado de cuenta. Al emitir el corte, se valida que `0 <= comision_final <= total_vendido` y exige nota obligatoria si difiere de la calculada.
+- **Cortes de cuenta (Liquidaciones) y bloqueo concurrente:** Inmutables una vez emitidos, con folio consecutivo propio (`#L-0001`). Exigen conexión a Internet. Al emitir un corte, el sistema bloquea con `FOR UPDATE` las ventas incluidas y vuelve a verificar dentro de la transacción que no estén canceladas ni cortadas por otra sesión simultánea.
 - **Renglones de liquidación únicos:** Cada renglón de venta (`venta_id, linea`) entra a lo sumo en un corte (`UNIQUE (venta_id, linea)`). Solo entran renglones de ventas vigentes (no canceladas), de cargas de ese productor, no liquidados previamente.
-- **Descuentos y mermas:** Conceptos de descuento (`flete`, `tara`, `merma`, `otro`). El sistema sugiere automáticamente las mermas de esas cargas que no hayan sido cobradas, con monto editable.
-- **Pagos y anticipos:** Se registran con `movimientos_dinero` (`egreso`, `pago_proveedor` y `anticipo_productor`). Pueden registrarse sin conexión y no se atan a ningún corte en específico.
+- **Mermas cobradas por ID (`movimiento_id`):** Las mermas se descuentan asociando `movimiento_id` en `liquidacion_conceptos` con índice único parcial (`0010_liquidacion_merma.sql`). `GET /liquidaciones/pendientes` excluye mermas por `movimiento_id` en lugar de comparar texto, impidiendo que cambios de redacción reofrezcan mermas cobradas y rechazando dobles emisiones (409 conflicto).
+- **Pagos y anticipos:** Se registran con `movimientos_dinero` (`egreso`, `pago_proveedor` y `anticipo_productor`). Pueden registrarse sin conexión y no se atan a ningún corte en específico. Se excluyen estrictamente de la cuenta de consigna los pagos ligados a compras (`compra_id IS NOT NULL` o concepto con `'compra'`).
 - **Saldo del productor (derivado, nunca almacenado):** `saldo = sum(neto de liquidaciones) + abonos − cargos − pagos − anticipos`. Puede ser negativo si los anticipos superan lo liquidado (saldo a favor del comerciante).
-- **Estado de cortes (FIFO):** Los pagos y anticipos se aplican cronológicamente a los cortes más antiguos para determinar su estado (`pendiente`, `parcial`, `pagado`). No existe tabla intermedia de aplicaciones para proveedores.
-- **Cancelaciones de ventas ya liquidadas:** Si se cancela una venta con renglones ya cortados, el sistema crea automáticamente un `ajustes_productor` de tipo `cargo` por `importe × (1 − tasa_efectiva)` (con `tasa_efectiva = comision_final / total_vendido`). La fruta devuelta siempre regresa a su carga y la reabre si estaba cerrada.
+- **Estado de cortes (FIFO unificado) y ajustes:**
+  - Los pagos y anticipos se aplican cronológicamente por orden de antigüedad (FIFO) a los cortes para determinar su estado (`pendiente`, `parcial`, `pagado`).
+  - Los cargos y abonos (`ajustes_productor`) ajustan el saldo global de la cuenta del productor, no el estado individual de cada corte.
+- **Cancelaciones de ventas ya liquidadas:** Si se cancela una venta con renglones ya cortados, el sistema crea automáticamente un `ajustes_productor` de tipo `cargo` por `importe × (1 − tasa_efectiva)` (con `tasa_efectiva = comision_final / total_vendido`). La fruta devuelta siempre regresa a su carga y la reabre si estaba cerrada. Un productor con venta cortada y cancelada mantiene saldo cero tras el ajuste.
 - **Ajustes manuales e incobrables:** Cargos y abonos manuales con asistente para cálculo sugerido de pérdida compartida por incobrables: `cargo = lo no cobrado × (1 − tasa de comisión)`.
-- **Permisos:** `liquidaciones.ver` y `liquidaciones.gestionar` (asignados a Dueño y Administrador; el Trabajador no puede emitir cortes ni ajustes).
+- **Permisos:** `liquidaciones.ver` y `liquidaciones.gestionar` (asignados a Dueño y Administrador; el Trabajador no puede emitir cortes, modificar comisiones ni registrar ajustes).
 
 **Seguridad**
 - PostgreSQL aplica Row Level Security: aunque la API tuviera un error, un negocio no puede leer ni escribir datos de otro (está probado).
@@ -193,7 +193,7 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 | `backend/.env`, `backend/.env.test`, `.env` | Contraseñas y secretos. Se versionan solo los `.example`. |
 | `node_modules/`, `dist/`, `frontend/dist-demo/` | Se generan con `npm install` y `npm run build`. |
 
-Si se cambia el esquema de la base: **nueva migración** en `database/migraciones/` con el siguiente número (hoy van de `0001` a `0007`, la próxima es `0008_…sql`); nunca se edita una ya aplicada. Se aplica con `npm run db:migrar` en `backend/`. Si la tabla nueva es de un negocio, lleva `negocio_id`, RLS forzado con la política `aislamiento_negocio` y sus permisos para `mc_app`.
+Si se cambia el esquema de la base: **nueva migración** en `database/migraciones/` con el siguiente número (hoy van de `0001` a `0010_liquidacion_merma.sql`, la próxima es `0011_…sql`); nunca se edita una ya aplicada. Se aplica con `npm run db:migrar` en `backend/`. Si la tabla nueva es de un negocio, lleva `negocio_id`, RLS forzado con la política `aislamiento_negocio` y sus permisos para `mc_app`.
 
 ---
 
