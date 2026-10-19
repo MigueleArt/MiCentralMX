@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { Router } from 'express';
 import { z } from 'zod';
-import { ventaRenglones, ventas } from '../db/esquema';
+import { cargas, ventaRenglones, ventas } from '../db/esquema';
 import { conflicto, noEncontrado } from '../http/errores';
 import { rutaNegocio } from '../http/ruta';
 import { registrarAuditoria } from '../lib/auditoria';
@@ -35,6 +35,27 @@ rutasVentas.post(
     const ahora = new Date();
     const renglones = await tx.select().from(ventaRenglones).where(eq(ventaRenglones.ventaId, id));
     for (const r of renglones) {
+      let cargaIdDevolver: string | undefined = undefined;
+      let motivoRenglon = motivo;
+
+      if (r.cargaId) {
+        const [c] = await tx.select().from(cargas).where(eq(cargas.id, r.cargaId)).for('update');
+        if (c) {
+          const tieneVentasLiquidadas = (c as any).liquidada === true;
+          if (c.estado === 'abierta') {
+            cargaIdDevolver = r.cargaId;
+          } else if (!tieneVentasLiquidadas) {
+            // Reabrir la carga porque no tiene ventas liquidadas
+            await tx.update(cargas).set({ estado: 'abierta', cerradaEn: null }).where(eq(cargas.id, r.cargaId));
+            cargaIdDevolver = r.cargaId;
+          } else {
+            // Carga cerrada con ventas liquidadas: devuelve la fruta a la existencia general y deja una nota en el motivo
+            cargaIdDevolver = undefined;
+            motivoRenglon = `${motivo} · Carga cerrada/liquidada: devuelto a existencia general`;
+          }
+        }
+      }
+
       await moverExistencia(tx, {
         negocioId: usuario.negocioId,
         clasificacionId: r.clasificacionId,
@@ -42,10 +63,11 @@ rutasVentas.post(
         delta: r.cantidad,
         tipo: 'cancelacion',
         referencia: `Venta ${folioVenta(v.folio)}`,
-        motivo,
+        motivo: motivoRenglon,
         usuarioId: usuario.id,
         usuarioNombre: usuario.nombre,
         creadoEn: ahora,
+        cargaId: cargaIdDevolver,
       });
     }
     await tx.update(ventas).set({ estado: 'cancelada', canceladaEn: ahora }).where(eq(ventas.id, id));

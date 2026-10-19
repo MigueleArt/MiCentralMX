@@ -39,17 +39,24 @@ export async function moverExistencia(
     usuarioNombre: m.usuarioNombre,
     creadoEn: m.creadoEn,
   });
+  let quedaCarga: ReturnType<typeof D> | null = null;
   if (m.cargaId) {
-    await tx.execute(sql`
+    const { rows: rowsCarga } = await tx.execute<{ cantidad: string }>(sql`
       insert into existencias_carga (carga_id, clasificacion_id, negocio_id, cantidad)
       values (${m.cargaId}, ${m.clasificacionId}, ${m.negocioId}, ${m.delta})
       on conflict (carga_id, clasificacion_id) do update set cantidad = existencias_carga.cantidad + excluded.cantidad
+      returning cantidad
     `);
+    quedaCarga = D(rowsCarga[0].cantidad);
   }
   const { rows } = await tx.execute<{ cantidad: string }>(sql`
     insert into existencias (clasificacion_id, negocio_id, cantidad)
     values (${m.clasificacionId}, ${m.negocioId}, ${m.delta})
     on conflict (clasificacion_id) do update set cantidad = existencias.cantidad + excluded.cantidad
     returning cantidad`);
-  return D(rows[0].cantidad);
+  const quedaTotal = D(rows[0].cantidad);
+  if (quedaCarga && quedaCarga.lt(0) && quedaCarga.lt(quedaTotal)) {
+    return quedaCarga;
+  }
+  return quedaTotal;
 }
