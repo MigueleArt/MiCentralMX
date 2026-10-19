@@ -34,7 +34,11 @@ export interface DatosClienteEdicion {
 }
 export const editarCliente = (id: string, d: DatosClienteEdicion) => yRefrescar(api<void>('PATCH', `/clientes/${id}`, d));
 
-export type DatosProveedor = Pick<Proveedor, 'nombre' | 'telefono' | 'productos'> & { tipo?: 'tercero' | 'rancho_propio' };
+export type DatosProveedor = Pick<Proveedor, 'nombre' | 'telefono' | 'productos'> & {
+  tipo?: 'tercero' | 'rancho_propio';
+  comisionTipo?: 'porcentaje' | 'por_unidad' | null;
+  comisionValor?: string | null;
+};
 export const crearProveedor = (d: DatosProveedor) => yRefrescar(api<Proveedor>('POST', '/proveedores', d));
 export const editarProveedor = (id: string, d: DatosProveedor) => yRefrescar(api<Proveedor>('PATCH', `/proveedores/${id}`, d));
 

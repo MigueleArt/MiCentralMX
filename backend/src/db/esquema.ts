@@ -137,6 +137,8 @@ export const proveedores = pgTable('proveedores', {
   telefono: text('telefono'),
   productos: text('productos').notNull(),
   tipo: text('tipo').$type<'tercero' | 'rancho_propio'>().notNull().default('tercero'),
+  comisionTipo: text('comision_tipo').$type<'porcentaje' | 'por_unidad'>(),
+  comisionValor: importe('comision_valor'),
   archivadoEn: ts('archivado_en'),
   txId: xid8('tx_id'),
 });
@@ -149,6 +151,8 @@ export const cargas = pgTable('cargas', {
   estado: text('estado').$type<'abierta' | 'cerrada'>().notNull(),
   usuarioId: uuid('usuario_id').notNull(),
   usuarioNombre: text('usuario_nombre').notNull(),
+  comisionTipo: text('comision_tipo').$type<'porcentaje' | 'por_unidad'>(),
+  comisionValor: importe('comision_valor'),
   dispositivoId: uuid('dispositivo_id'),
   creadoEnDispositivo: ts('creado_en_dispositivo').notNull(),
   cerradaEn: ts('cerrada_en'),
@@ -367,3 +371,70 @@ export const alertasInventario = pgTable('alertas_inventario', {
   resueltaPor: uuid('resuelta_por'),
   resueltaEn: ts('resuelta_en'),
 });
+
+export const liquidaciones = pgTable('liquidaciones', {
+  id: uuid('id').primaryKey(),
+  negocioId: uuid('negocio_id').notNull(),
+  folio: integer('folio').notNull(),
+  proveedorId: uuid('proveedor_id').notNull(),
+  periodoDesde: date('periodo_desde', { mode: 'string' }),
+  periodoHasta: date('periodo_hasta', { mode: 'string' }),
+  totalVendido: importe('total_vendido').notNull(),
+  unidadesVendidas: cantidad('unidades_vendidas').notNull(),
+  comisionTipo: text('comision_tipo').$type<'porcentaje' | 'por_unidad'>().notNull(),
+  comisionValor: importe('comision_valor').notNull(),
+  comisionCalculada: importe('comision_calculada').notNull(),
+  comisionFinal: importe('comision_final').notNull(),
+  comisionNota: text('comision_nota'),
+  descuentosTotal: importe('descuentos_total').notNull(),
+  neto: importe('neto').notNull(),
+  usuarioId: uuid('usuario_id').notNull(),
+  usuarioNombre: text('usuario_nombre').notNull(),
+  creadoEn: ts('creado_en').notNull().defaultNow(),
+  txId: xid8('tx_id'),
+});
+
+export const liquidacionRenglones = pgTable(
+  'liquidacion_renglones',
+  {
+    liquidacionId: uuid('liquidacion_id').notNull(),
+    ventaId: uuid('venta_id').notNull(),
+    linea: integer('linea').notNull(),
+    cargaId: uuid('carga_id'),
+    importe: importe('importe').notNull(),
+    unidades: cantidad('unidades').notNull(),
+    negocioId: uuid('negocio_id').notNull(),
+    txId: xid8('tx_id'),
+  },
+  (t) => [primaryKey({ columns: [t.liquidacionId, t.ventaId, t.linea] })],
+);
+
+export const liquidacionConceptos = pgTable(
+  'liquidacion_conceptos',
+  {
+    liquidacionId: uuid('liquidacion_id').notNull(),
+    linea: integer('linea').notNull(),
+    tipo: text('tipo').$type<'flete' | 'tara' | 'merma' | 'otro'>().notNull(),
+    concepto: text('concepto').notNull(),
+    monto: importe('monto').notNull(),
+    negocioId: uuid('negocio_id').notNull(),
+    txId: xid8('tx_id'),
+  },
+  (t) => [primaryKey({ columns: [t.liquidacionId, t.linea] })],
+);
+
+export const ajustesProductor = pgTable('ajustes_productor', {
+  id: uuid('id').primaryKey(),
+  negocioId: uuid('negocio_id').notNull(),
+  proveedorId: uuid('proveedor_id').notNull(),
+  tipo: text('tipo').$type<'cargo' | 'abono'>().notNull(),
+  categoria: text('categoria').$type<'cancelacion' | 'incobrable' | 'otro'>().notNull(),
+  concepto: text('concepto').notNull(),
+  monto: importe('monto').notNull(),
+  ventaId: uuid('venta_id'),
+  usuarioId: uuid('usuario_id').notNull(),
+  usuarioNombre: text('usuario_nombre').notNull(),
+  creadoEn: ts('creado_en').notNull().defaultNow(),
+  txId: xid8('tx_id'),
+});
+

@@ -1,12 +1,12 @@
 import type { EntradaHistorial, ResumenReportes } from '@micentralmx/shared/api';
-import { and, desc, eq, ilike, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, sql } from 'drizzle-orm';
 import { Router } from 'express';
 import { z } from 'zod';
 import { config } from '../config';
-import { auditoria, negocios } from '../db/esquema';
+import { auditoria, liquidaciones, negocios, proveedores } from '../db/esquema';
 import { rutaNegocio } from '../http/ruta';
 import { registrarAuditoria } from '../lib/auditoria';
-import { aImporte } from '../lib/dinero';
+import { aCantidad, aImporte, D } from '../lib/dinero';
 
 export const rutasConsultas = Router();
 
@@ -115,3 +115,152 @@ rutasConsultas.get(
     } satisfies ResumenReportes;
   }),
 );
+
+rutasConsultas.get(
+  '/reportes/productores',
+  rutaNegocio('reportes.ver', async ({ tx, usuario, req }) => {
+    const { desde, hasta, agrupacion } = z
+      .object({
+        desde: z.string().optional(),
+        hasta: z.string().optional(),
+        agrupacion: z.enum(['semana', 'quincena', 'mes']).default('mes'),
+      })
+      .parse(req.query);
+
+    const provs = await tx
+      .select()
+      .from(proveedores)
+      .where(and(eq(proveedores.negocioId, usuario.negocioId), isNull(proveedores.archivadoEn), eq(proveedores.tipo, 'tercero')));
+
+    const zona = config.zonaHoraria;
+    const diaCol = (col: string) => sql.raw(`(${col} at time zone '${zona}')::date`);
+    const filtroFecha = desde && hasta ? sql`${diaCol('creado_en')} between ${desde} and ${hasta}` : sql`true`;
+
+    const liqs = await tx
+      .select()
+      .from(liquidaciones)
+      .where(and(eq(liquidaciones.negocioId, usuario.negocioId), filtroFecha));
+
+    let porPagarTotalD = D(0);
+    const mapaProd = new Map<
+      string,
+      {
+        proveedorId: string;
+        nombre: string;
+        totalVendido: ReturnType<typeof D>;
+        unidadesVendidas: ReturnType<typeof D>;
+        comisionGanada: ReturnType<typeof D>;
+        netoLiquidado: ReturnType<typeof D>;
+        cortes: number;
+        saldoActual: string;
+      }
+    >();
+
+    for (const p of provs) {
+      const { rows: rLiq } = await tx.execute<{ total: string }>(
+        sql`select coalesce(sum(neto), 0)::text as total from liquidaciones where negocio_id = ${usuario.negocioId} and proveedor_id = ${p.id}`,
+      );
+      const { rows: rAjuste } = await tx.execute<{ abonos: string; cargos: string }>(
+        sql`select coalesce(sum(case when tipo = 'abono' then monto else 0 end), 0)::text as abonos,
+                   coalesce(sum(case when tipo = 'cargo' then monto else 0 end), 0)::text as cargos
+            from ajustes_productor where negocio_id = ${usuario.negocioId} and proveedor_id = ${p.id}`,
+      );
+      const { rows: rDinero } = await tx.execute<{ pagos: string; anticipos: string }>(
+        sql`select coalesce(sum(case when categoria = 'pago_proveedor' then monto else 0 end), 0)::text as pagos,
+                   coalesce(sum(case when categoria = 'anticipo_productor' then monto else 0 end), 0)::text as anticipos
+            from movimientos_dinero where negocio_id = ${usuario.negocioId} and proveedor_id = ${p.id}`,
+      );
+      const saldo = D(rLiq[0]?.total ?? 0)
+        .plus(rAjuste[0]?.abonos ?? 0)
+        .minus(rAjuste[0]?.cargos ?? 0)
+        .minus(rDinero[0]?.pagos ?? 0)
+        .minus(rDinero[0]?.anticipos ?? 0);
+
+      if (saldo.gt(0)) porPagarTotalD = porPagarTotalD.plus(saldo);
+
+      mapaProd.set(p.id, {
+        proveedorId: p.id,
+        nombre: p.nombre,
+        totalVendido: D(0),
+        unidadesVendidas: D(0),
+        comisionGanada: D(0),
+        netoLiquidado: D(0),
+        cortes: 0,
+        saldoActual: aImporte(saldo),
+      });
+    }
+
+    const mapaPeriodos = new Map<
+      string,
+      { totalVendido: ReturnType<typeof D>; comisionGanada: ReturnType<typeof D>; netoLiquidado: ReturnType<typeof D>; cortes: number }
+    >();
+
+    for (const l of liqs) {
+      const p = mapaProd.get(l.proveedorId);
+      if (p) {
+        p.totalVendido = p.totalVendido.plus(l.totalVendido);
+        p.unidadesVendidas = p.unidadesVendidas.plus(l.unidadesVendidas);
+        p.comisionGanada = p.comisionGanada.plus(l.comisionFinal);
+        p.netoLiquidado = p.netoLiquidado.plus(l.neto);
+        p.cortes += 1;
+      }
+
+      const f = new Date(l.creadoEn);
+      let clavePeriodo = '';
+      if (agrupacion === 'semana') {
+        const anyo = f.getFullYear();
+        const primero = new Date(anyo, 0, 1);
+        const dias = Math.floor((f.getTime() - primero.getTime()) / (24 * 60 * 60 * 1000));
+        const semana = Math.ceil((dias + primero.getDay() + 1) / 7);
+        clavePeriodo = `${anyo}-Semana ${semana}`;
+      } else if (agrupacion === 'quincena') {
+        const anyo = f.getFullYear();
+        const mes = String(f.getMonth() + 1).padStart(2, '0');
+        const quincena = f.getDate() <= 15 ? 'Q1' : 'Q2';
+        clavePeriodo = `${anyo}-${mes} ${quincena}`;
+      } else {
+        const anyo = f.getFullYear();
+        const mes = String(f.getMonth() + 1).padStart(2, '0');
+        clavePeriodo = `${anyo}-${mes}`;
+      }
+
+      const prevPeriodo = mapaPeriodos.get(clavePeriodo) ?? {
+        totalVendido: D(0),
+        comisionGanada: D(0),
+        netoLiquidado: D(0),
+        cortes: 0,
+      };
+      prevPeriodo.totalVendido = prevPeriodo.totalVendido.plus(l.totalVendido);
+      prevPeriodo.comisionGanada = prevPeriodo.comisionGanada.plus(l.comisionFinal);
+      prevPeriodo.netoLiquidado = prevPeriodo.netoLiquidado.plus(l.neto);
+      prevPeriodo.cortes += 1;
+      mapaPeriodos.set(clavePeriodo, prevPeriodo);
+    }
+
+    return {
+      desde: desde ?? '',
+      hasta: hasta ?? '',
+      porPagarTotal: aImporte(porPagarTotalD),
+      productores: Array.from(mapaProd.values()).map((p) => ({
+        proveedorId: p.proveedorId,
+        nombre: p.nombre,
+        totalVendido: aImporte(p.totalVendido),
+        unidadesVendidas: aCantidad(p.unidadesVendidas),
+        comisionGanada: aImporte(p.comisionGanada),
+        netoLiquidado: aImporte(p.netoLiquidado),
+        cortes: p.cortes,
+        saldoActual: p.saldoActual,
+      })),
+      periodos: Array.from(mapaPeriodos.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([periodo, v]) => ({
+          periodo,
+          totalVendido: aImporte(v.totalVendido),
+          comisionGanada: aImporte(v.comisionGanada),
+          netoLiquidado: aImporte(v.netoLiquidado),
+          cortes: v.cortes,
+        })),
+    };
+  }),
+);
+

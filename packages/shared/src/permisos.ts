@@ -26,6 +26,8 @@ export const PERMISOS = {
   'revisiones.resolver': 'Resolver operaciones en revisión',
   'cargas.registrar': 'Registrar cargas del día',
   'cargas.cerrar': 'Cerrar cargas',
+  'liquidaciones.ver': 'Consultar liquidaciones y cuentas de productores',
+  'liquidaciones.gestionar': 'Emitir liquidaciones y registrar ajustes a productores',
   'configuracion.editar': 'Cambiar la configuración del negocio',
 } as const;
 

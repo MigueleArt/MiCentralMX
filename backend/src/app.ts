@@ -12,6 +12,7 @@ import { rutasRevisiones } from './modulos/revisiones';
 import { rutasSync } from './modulos/sync/rutas';
 import { rutasUsuarios } from './modulos/usuarios';
 import { rutasVentas } from './modulos/ventas';
+import { rutasLiquidaciones } from './modulos/liquidaciones';
 
 export function crearApp() {
   const app = express();
@@ -32,7 +33,18 @@ export function crearApp() {
   });
   api.use('/auth', rutasAuth);
   api.use('/plataforma', rutasPlataforma);
-  api.use(rutasDispositivos, rutasSync, rutasCatalogo, rutasCargas, rutasVentas, rutasUsuarios, rutasConsultas, rutasRevisiones, rutasAlertas);
+  api.use(
+    rutasDispositivos,
+    rutasSync,
+    rutasCatalogo,
+    rutasCargas,
+    rutasVentas,
+    rutasUsuarios,
+    rutasConsultas,
+    rutasRevisiones,
+    rutasAlertas,
+    rutasLiquidaciones,
+  );
   api.use((req, _res, next) => next(noEncontrado(`Ruta no disponible: ${req.method} ${req.path}`)));
 
   app.use('/api', api);

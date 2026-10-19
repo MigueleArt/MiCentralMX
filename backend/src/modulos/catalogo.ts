@@ -187,9 +187,11 @@ rutasCatalogo.patch(
 
 const esquemaProveedor = z.object({
   nombre: z.string().trim().min(1, 'Escribe el nombre del proveedor.').max(160),
-  telefono: z.string().trim().max(30).nullable(),
+  telefono: z.string().trim().max(30).nullish(),
   productos: z.string().trim().max(300).default(''),
   tipo: z.enum(['tercero', 'rancho_propio']).default('tercero'),
+  comisionTipo: z.enum(['porcentaje', 'por_unidad']).nullish(),
+  comisionValor: decimal.nullish(),
 });
 
 rutasCatalogo.post(
@@ -197,7 +199,16 @@ rutasCatalogo.post(
   rutaNegocio('proveedores.gestionar', async ({ tx, usuario, req }) => {
     const d = esquemaProveedor.parse(req.body);
     const id = uuid();
-    await tx.insert(proveedores).values({ id, negocioId: usuario.negocioId, nombre: d.nombre, telefono: d.telefono || null, productos: d.productos, tipo: d.tipo });
+    await tx.insert(proveedores).values({
+      id,
+      negocioId: usuario.negocioId,
+      nombre: d.nombre,
+      telefono: d.telefono || null,
+      productos: d.productos,
+      tipo: d.tipo,
+      comisionTipo: d.comisionTipo ?? null,
+      comisionValor: d.comisionValor ? aImporte(d.comisionValor) : null,
+    });
     await registrarAuditoria(tx, usuario, 'compras', `${usuario.nombre} agregó al proveedor o rancho ${d.nombre}`, { tabla: 'proveedores', registroId: id });
     return mapa.proveedor((await tx.select().from(proveedores).where(eq(proveedores.id, id)))[0]);
   }),
@@ -210,7 +221,17 @@ rutasCatalogo.patch(
     const id = String(req.params.id);
     const [p] = await tx.select().from(proveedores).where(eq(proveedores.id, id));
     if (!p) throw noEncontrado('El proveedor no existe.');
-    await tx.update(proveedores).set({ nombre: d.nombre, telefono: d.telefono || null, productos: d.productos, tipo: d.tipo }).where(eq(proveedores.id, id));
+    await tx
+      .update(proveedores)
+      .set({
+        nombre: d.nombre,
+        telefono: d.telefono || null,
+        productos: d.productos,
+        tipo: d.tipo,
+        comisionTipo: d.comisionTipo ?? null,
+        comisionValor: d.comisionValor ? aImporte(d.comisionValor) : null,
+      })
+      .where(eq(proveedores.id, id));
     await registrarAuditoria(tx, usuario, 'compras', `${usuario.nombre} editó al proveedor o rancho ${d.nombre}`, { tabla: 'proveedores', registroId: id, antes: mapa.proveedor(p), despues: d });
     return mapa.proveedor((await tx.select().from(proveedores).where(eq(proveedores.id, id)))[0]);
   }),

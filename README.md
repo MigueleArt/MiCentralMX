@@ -1,5 +1,3 @@
-Lezama Zarate Eduardo
-
 # MiCentralMX
 
 PWA para bodegas de la central de abasto: ventas de contado y a crédito, cobranza, inventario por clasificación (Primera, Segunda, Tercera…), compras, mermas, pagos y reportes. **Funciona sin conexión**: las operaciones se guardan en el dispositivo y se sincronizan una sola vez al recuperar Internet. Cada negocio tiene sus datos completamente separados.
@@ -153,7 +151,7 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 
 **Revisiones.** Las operaciones que llegan con observaciones aparecen en Más → Revisiones para Dueño y Administrador. Ejemplos: existencia negativa, pago de más, reloj desfasado, cliente duplicado o un registro que todavía no existe. Desde ahí se **aprueban**, se **reaplican** o se **descartan**, con nota opcional.
 
-**Carga del día y asignación**
+**Carga del día y asignación (Fase 1)**
 - Los orígenes se modelan en `proveedores` mediante el campo `tipo` (`'tercero'` o `'rancho_propio'`).
 - Cada carga abierta registra la fruta que llega por clasificación y origen. Las ventas descuentan tanto de la carga asignada (`existencias_carga`) como del inventario general (`existencias`). Invariante: `existencias.cantidad = suma(existencias_carga) + existencia sin carga`.
 - Asignación automática: la venta descuenta de la carga abierta más antigua con existencia disponible; si la cantidad excede la existencia de la carga seleccionada, el renglón se divide automáticamente entre varias cargas. El vendedor puede cambiar el origen asignado.
@@ -161,6 +159,19 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 - Cierre de carga: requiere conexión y permiso `cargas.cerrar`; exige que todo sobrante se resuelva como merma, devolución al productor o se mantenga la carga abierta.
 - Permisos: `cargas.registrar` y `cargas.cerrar` (el Trabajador no los tiene por omisión).
 - Decimales en unidades: unidades como 'tara' permiten decimales (`permite_decimales = true`), configurables en línea.
+
+**Liquidaciones a productores, comisiones y cuenta corriente (Fase 2)**
+- **Consigna y ranchos propios:** La fruta de productores externos se vende en consigna y los ranchos propios no generan cuenta por pagar (`saldo = 0`).
+- **Comisión flexible:** Puede ser porcentaje de lo vendido (`total_vendido × valor / 100`) o por unidad (`unidades_vendidas × valor`). Se define por omisión en el productor y puede sobrescribirse en la carga mientras no tenga renglones liquidados. Si varias cargas entran al mismo corte, se calcula por carga y se suma. Al emitir el corte, la comisión final es editable pero exige nota obligatoria si difiere de la calculada.
+- **Cortes de cuenta (Liquidaciones):** Inmutables una vez emitidos, con folio consecutivo propio (`#L-0001`). Exigen conexión a Internet. Total vendido, unidades vendidas, comisiones, conceptos de descuento y neto a liquidar.
+- **Renglones de liquidación únicos:** Cada renglón de venta (`venta_id, linea`) entra a lo sumo en un corte (`UNIQUE (venta_id, linea)`). Solo entran renglones de ventas vigentes (no canceladas), de cargas de ese productor, no liquidados previamente.
+- **Descuentos y mermas:** Conceptos de descuento (`flete`, `tara`, `merma`, `otro`). El sistema sugiere automáticamente las mermas de esas cargas que no hayan sido cobradas, con monto editable.
+- **Pagos y anticipos:** Se registran con `movimientos_dinero` (`egreso`, `pago_proveedor` y `anticipo_productor`). Pueden registrarse sin conexión y no se atan a ningún corte en específico.
+- **Saldo del productor (derivado, nunca almacenado):** `saldo = sum(neto de liquidaciones) + abonos − cargos − pagos − anticipos`. Puede ser negativo si los anticipos superan lo liquidado (saldo a favor del comerciante).
+- **Estado de cortes (FIFO):** Los pagos y anticipos se aplican cronológicamente a los cortes más antiguos para determinar su estado (`pendiente`, `parcial`, `pagado`). No existe tabla intermedia de aplicaciones para proveedores.
+- **Cancelaciones de ventas ya liquidadas:** Si se cancela una venta con renglones ya cortados, el sistema crea automáticamente un `ajustes_productor` de tipo `cargo` por `importe × (1 − tasa_efectiva)` (con `tasa_efectiva = comision_final / total_vendido`). La fruta devuelta siempre regresa a su carga y la reabre si estaba cerrada.
+- **Ajustes manuales e incobrables:** Cargos y abonos manuales con asistente para cálculo sugerido de pérdida compartida por incobrables: `cargo = lo no cobrado × (1 − tasa de comisión)`.
+- **Permisos:** `liquidaciones.ver` y `liquidaciones.gestionar` (asignados a Dueño y Administrador; el Trabajador no puede emitir cortes ni ajustes).
 
 **Seguridad**
 - PostgreSQL aplica Row Level Security: aunque la API tuviera un error, un negocio no puede leer ni escribir datos de otro (está probado).

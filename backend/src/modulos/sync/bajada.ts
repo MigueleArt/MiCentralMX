@@ -130,6 +130,37 @@ const FUENTES: Fuente[] = [
     inicial: (limite) => gte(t.movimientosDinero.creadoEn, limite),
     mapear: async (_tx, f: (typeof t.movimientosDinero.$inferSelect)[]) => f.map(mapa.movimientoDinero),
   }),
+  fuente({
+    nombre: 'liquidaciones',
+    tabla: t.liquidaciones,
+    clave: t.liquidaciones.id,
+    tx: t.liquidaciones.txId,
+    inicial: (limite) => gte(t.liquidaciones.creadoEn, limite),
+    mapear: async (tx, f: (typeof t.liquidaciones.$inferSelect)[]) => {
+      const ids = f.map((c) => c.id);
+      const r = ids.length
+        ? await tx.select().from(t.liquidacionRenglones).where(inArray(t.liquidacionRenglones.liquidacionId, ids)).orderBy(asc(t.liquidacionRenglones.linea))
+        : [];
+      const c = ids.length
+        ? await tx.select().from(t.liquidacionConceptos).where(inArray(t.liquidacionConceptos.liquidacionId, ids)).orderBy(asc(t.liquidacionConceptos.linea))
+        : [];
+      return f.map((l) =>
+        mapa.liquidacion(
+          l,
+          r.filter((x) => x.liquidacionId === l.id).map(mapa.liquidacionRenglon),
+          c.filter((x) => x.liquidacionId === l.id).map(mapa.liquidacionConcepto),
+        ),
+      );
+    },
+  }),
+  fuente({
+    nombre: 'ajustesProductor',
+    tabla: t.ajustesProductor,
+    clave: t.ajustesProductor.id,
+    tx: t.ajustesProductor.txId,
+    inicial: (limite) => gte(t.ajustesProductor.creadoEn, limite),
+    mapear: async (_tx, f: (typeof t.ajustesProductor.$inferSelect)[]) => f.map(mapa.ajusteProductor),
+  }),
 ];
 
 const vacio = (): CambiosPull => ({
@@ -146,6 +177,10 @@ const vacio = (): CambiosPull => ({
   compras: [],
   movimientosInventario: [],
   movimientosDinero: [],
+  liquidaciones: [],
+  liquidacionRenglones: [],
+  liquidacionConceptos: [],
+  ajustesProductor: [],
 });
 
 export async function bajarPagina(tx: Tx, cursor: string, tamano = config.tamanoPaginaBajada): Promise<{ cambios: CambiosPull; cursor: string; hayMas: boolean }> {
@@ -181,6 +216,11 @@ export async function bajarPagina(tx: Tx, cursor: string, tamano = config.tamano
 
     const caben = filas.slice(0, restante);
     (cambios[f.nombre] as unknown[]) = await f.mapear(tx, caben as never[]);
+    if (f.nombre === 'liquidaciones') {
+      const liqs = cambios.liquidaciones;
+      cambios.liquidacionRenglones = liqs.flatMap((l) => l.renglones ?? []);
+      cambios.liquidacionConceptos = liqs.flatMap((l) => l.conceptos ?? []);
+    }
     if (filas.length > restante) {
       const ultimo = caben[caben.length - 1];
       const ultimoId = String(ultimo[f.nombre === 'existencias' ? 'clasificacionId' : 'id']);

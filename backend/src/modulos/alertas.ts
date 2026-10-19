@@ -31,7 +31,13 @@ rutasAlertas.get(
         clasificacionId: a.clasificacionId,
         productoId,
         cargaId: a.cargaId ?? null,
-        descripcion: a.cargaId ? `${p} · ${c} (Carga)` : `${p} · ${c}`,
+        tipo: a.tipo,
+        descripcion:
+          a.tipo === 'carga_excede_total'
+            ? `${p} · ${c}: las cargas suman más que el inventario total`
+            : a.cargaId
+            ? `${p} · ${c} (Carga)`
+            : `${p} · ${c}`,
         unidadPlural: u,
         existencia: a.existencia,
         sumaMovimientos: a.sumaMovimientos,

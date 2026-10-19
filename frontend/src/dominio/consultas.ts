@@ -9,7 +9,9 @@ import type {
   Cliente,
   EstadoVenta,
   Producto,
+  Proveedor,
   Unidad,
+  Liquidacion,
 } from '@micentralmx/shared/entidades';
 import { db, type CargaLocal, type EstadoSync, type OperacionLocal, type PagoLocal, type VentaLocal } from '../db/db';
 import { D, sumar } from '../lib/dinero';
@@ -646,3 +648,239 @@ export async function totalesCargaDelDia(fecha = diaLocal()): Promise<TotalesCar
     cargas: resumenCargas,
   };
 }
+
+// ── Estado de cuenta y saldos de productores ───────────────────────────────
+
+export interface SaldoProductorVista {
+  proveedorId: string;
+  nombre: string;
+  tipo: 'tercero' | 'rancho_propio';
+  telefono: string | null;
+  totalLiquidado: Decimal;
+  totalAjustes: Decimal;
+  totalPagado: Decimal;
+  totalAnticipos: Decimal;
+  saldo: Decimal;
+}
+
+export type EstadoCorte = 'pendiente' | 'parcial' | 'pagado';
+
+export interface MovimientoEstadoCuentaProductor {
+  id: string;
+  fecha: string;
+  tipo: 'corte' | 'pago' | 'anticipo' | 'cargo' | 'abono';
+  folio?: number | null;
+  concepto: string;
+  cargo: Decimal;
+  abono: Decimal;
+  saldoCorrido: Decimal;
+  estadoCorte?: EstadoCorte;
+  montoCubierto?: Decimal;
+  referenciaId?: string;
+  raw?: unknown;
+}
+
+export interface EstadoCuentaProductorVista {
+  proveedor: Proveedor;
+  saldo: Decimal;
+  totalLiquidado: Decimal;
+  totalAjustes: Decimal;
+  totalPagos: Decimal;
+  totalAnticipos: Decimal;
+  movimientos: MovimientoEstadoCuentaProductor[];
+  items: MovimientoEstadoCuentaProductor[];
+  cortes: Array<{
+    liquidacion: Liquidacion;
+    estado: EstadoCorte;
+    montoCubierto: Decimal;
+    saldoRestante: Decimal;
+  }>;
+}
+
+export async function saldosProductoresLocales(): Promise<SaldoProductorVista[]> {
+  const [proveedores, liquidaciones, ajustes, movimientos, { porId }] = await Promise.all([
+    db.proveedores.toArray(),
+    db.liquidaciones.toArray(),
+    db.ajustesProductor.toArray(),
+    db.movimientosDinero.toArray(),
+    cargarOperaciones(),
+  ]);
+
+  return proveedores.map((p) => {
+    if (p.tipo === 'rancho_propio') {
+      return {
+        proveedorId: p.id,
+        nombre: p.nombre,
+        tipo: p.tipo,
+        telefono: p.telefono,
+        totalLiquidado: D(0),
+        totalAjustes: D(0),
+        totalPagado: D(0),
+        totalAnticipos: D(0),
+        saldo: D(0),
+      };
+    }
+
+    const provLiqs = liquidaciones.filter((l) => l.proveedorId === p.id);
+    const provAjustes = ajustes.filter((a) => a.proveedorId === p.id);
+    const provMovs = movimientos.filter(
+      (m) =>
+        m.proveedorId === p.id &&
+        (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor') &&
+        (!m.operacionId || porId.get(m.operacionId)?.estado !== 'rechazada'),
+    );
+
+    const totalLiquidado = sumar(provLiqs.map((l) => l.neto));
+    const abonos = sumar(provAjustes.filter((a) => a.tipo === 'abono').map((a) => a.monto));
+    const cargos = sumar(provAjustes.filter((a) => a.tipo === 'cargo').map((a) => a.monto));
+    const totalAjustes = abonos.minus(cargos);
+    const totalPagado = sumar(provMovs.filter((m) => m.categoria === 'pago_proveedor').map((m) => m.monto));
+    const totalAnticipos = sumar(provMovs.filter((m) => m.categoria === 'anticipo_productor').map((m) => m.monto));
+    const saldo = totalLiquidado.plus(totalAjustes).minus(totalPagado).minus(totalAnticipos);
+
+    return {
+      proveedorId: p.id,
+      nombre: p.nombre,
+      tipo: p.tipo,
+      telefono: p.telefono,
+      totalLiquidado,
+      totalAjustes,
+      totalPagado,
+      totalAnticipos,
+      saldo,
+    };
+  });
+}
+
+export async function estadoCuentaProductorLocal(proveedorId: string): Promise<EstadoCuentaProductorVista> {
+  const [proveedor, liquidaciones, ajustes, movimientos, { porId }] = await Promise.all([
+    db.proveedores.get(proveedorId),
+    db.liquidaciones.where('proveedorId').equals(proveedorId).toArray(),
+    db.ajustesProductor.where('proveedorId').equals(proveedorId).toArray(),
+    db.movimientosDinero.toArray(),
+    cargarOperaciones(),
+  ]);
+
+  if (!proveedor) {
+    throw new Error('Proveedor no encontrado.');
+  }
+
+  const provMovs = movimientos.filter(
+    (m) =>
+      m.proveedorId === proveedorId &&
+      (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor') &&
+      (!m.operacionId || porId.get(m.operacionId)?.estado !== 'rechazada'),
+  );
+
+  const totalLiquidado = sumar(liquidaciones.map((l) => l.neto));
+  const abonos = sumar(ajustes.filter((a) => a.tipo === 'abono').map((a) => a.monto));
+  const cargos = sumar(ajustes.filter((a) => a.tipo === 'cargo').map((a) => a.monto));
+  const totalAjustes = abonos.minus(cargos);
+  const totalPagado = sumar(provMovs.filter((m) => m.categoria === 'pago_proveedor').map((m) => m.monto));
+  const totalAnticipos = sumar(provMovs.filter((m) => m.categoria === 'anticipo_productor').map((m) => m.monto));
+  const saldo = totalLiquidado.plus(totalAjustes).minus(totalPagado).minus(totalAnticipos);
+
+  // Cortes FIFO
+  const liquidacionesOrdenadas = [...liquidaciones].sort((a, b) => a.creadoEn.localeCompare(b.creadoEn));
+  let pagosRestantes = totalPagado.plus(totalAnticipos);
+  const cortesInfoMap = new Map<string, { estado: EstadoCorte; montoCubierto: Decimal; saldoRestante: Decimal }>();
+
+  const cortes = liquidacionesOrdenadas.map((l) => {
+    const neto = D(l.neto);
+    let estado: EstadoCorte = 'pendiente';
+    let montoCubierto = D(0);
+    let saldoRestante = neto;
+
+    if (pagosRestantes.gte(neto)) {
+      estado = 'pagado';
+      montoCubierto = neto;
+      saldoRestante = D(0);
+      pagosRestantes = pagosRestantes.minus(neto);
+    } else if (pagosRestantes.gt(0)) {
+      estado = 'parcial';
+      montoCubierto = pagosRestantes;
+      saldoRestante = neto.minus(pagosRestantes);
+      pagosRestantes = D(0);
+    }
+
+    const info = { estado, montoCubierto, saldoRestante };
+    cortesInfoMap.set(l.id, info);
+    return {
+      liquidacion: l,
+      ...info,
+    };
+  });
+
+  // Movimientos unificados
+  const items: MovimientoEstadoCuentaProductor[] = [];
+
+  for (const l of liquidaciones) {
+    const cInfo = cortesInfoMap.get(l.id);
+    items.push({
+      id: l.id,
+      fecha: l.creadoEn,
+      tipo: 'corte',
+      folio: l.folio,
+      concepto: `Corte #${l.folio ?? ''}`,
+      cargo: D(0),
+      abono: D(l.neto),
+      saldoCorrido: D(0),
+      estadoCorte: cInfo?.estado,
+      montoCubierto: cInfo?.montoCubierto,
+      referenciaId: l.id,
+      raw: l,
+    });
+  }
+
+  for (const a of ajustes) {
+    const isAbono = a.tipo === 'abono';
+    items.push({
+      id: a.id,
+      fecha: a.creadoEn,
+      tipo: isAbono ? 'abono' : 'cargo',
+      concepto: `Ajuste (${a.categoria}): ${a.concepto}`,
+      cargo: isAbono ? D(0) : D(a.monto),
+      abono: isAbono ? D(a.monto) : D(0),
+      saldoCorrido: D(0),
+      referenciaId: a.id,
+      raw: a,
+    });
+  }
+
+  for (const m of provMovs) {
+    const isAnticipo = m.categoria === 'anticipo_productor';
+    const esPendiente = Boolean(m.operacionId && porId.get(m.operacionId)?.estado === 'pendiente');
+    items.push({
+      id: m.id,
+      fecha: m.creadoEn,
+      tipo: isAnticipo ? 'anticipo' : 'pago',
+      concepto: esPendiente ? `${m.concepto} (pendiente)` : m.concepto,
+      cargo: D(m.monto),
+      abono: D(0),
+      saldoCorrido: D(0),
+      referenciaId: m.id,
+      raw: m,
+    });
+  }
+
+  items.sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  let corrido = D(0);
+  for (const it of items) {
+    corrido = corrido.plus(it.abono).minus(it.cargo);
+    it.saldoCorrido = corrido;
+  }
+
+  return {
+    proveedor,
+    saldo,
+    totalLiquidado,
+    totalAjustes,
+    totalPagos: totalPagado,
+    totalAnticipos,
+    movimientos: items,
+    items,
+    cortes,
+  };
+}
+

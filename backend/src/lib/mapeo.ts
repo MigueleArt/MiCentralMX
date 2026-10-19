@@ -1,10 +1,14 @@
 import type {
+  AjusteProductor,
   Carga,
   Cliente,
   Clasificacion,
   Compra,
   Existencia,
   ExistenciaCarga,
+  Liquidacion,
+  LiquidacionConcepto,
+  LiquidacionRenglon,
   MovimientoDinero,
   MovimientoInventario,
   Pago,
@@ -67,6 +71,8 @@ export const proveedor = (r: Fila<typeof e.proveedores>): Proveedor => ({
   telefono: r.telefono,
   productos: r.productos,
   tipo: r.tipo ?? 'tercero',
+  comisionTipo: r.comisionTipo ?? null,
+  comisionValor: r.comisionValor ?? null,
   archivadoEn: iso(r.archivadoEn),
 });
 
@@ -84,6 +90,8 @@ export const carga = (r: Fila<typeof e.cargas>, renglones: RenglonCarga[]): Carg
   renglones,
   usuarioId: r.usuarioId,
   usuarioNombre: r.usuarioNombre,
+  comisionTipo: r.comisionTipo ?? null,
+  comisionValor: r.comisionValor ?? null,
   dispositivoId: r.dispositivoId ?? 'servidor',
   creadoEnDispositivo: r.creadoEnDispositivo.toISOString(),
   cerradaEn: iso(r.cerradaEn),
@@ -198,3 +206,62 @@ export const movimientoDinero = (r: Fila<typeof e.movimientosDinero>): Movimient
   usuarioNombre: r.usuarioNombre,
   creadoEn: r.creadoEn.toISOString(),
 });
+
+export const liquidacionRenglon = (r: Fila<typeof e.liquidacionRenglones>): LiquidacionRenglon => ({
+  id: `${r.liquidacionId}:${r.linea}`,
+  liquidacionId: r.liquidacionId,
+  linea: r.linea,
+  ventaId: r.ventaId,
+  cargaId: r.cargaId ?? null,
+  importe: r.importe,
+  unidades: r.unidades,
+});
+
+export const liquidacionConcepto = (r: Fila<typeof e.liquidacionConceptos>): LiquidacionConcepto => ({
+  id: `${r.liquidacionId}:${r.linea}`,
+  liquidacionId: r.liquidacionId,
+  linea: r.linea,
+  tipo: r.tipo,
+  concepto: r.concepto,
+  monto: r.monto,
+});
+
+export const liquidacion = (
+  r: Fila<typeof e.liquidaciones>,
+  renglones: LiquidacionRenglon[] = [],
+  conceptos: LiquidacionConcepto[] = [],
+): Liquidacion => ({
+  id: r.id,
+  folio: r.folio,
+  proveedorId: r.proveedorId,
+  periodoDesde: r.periodoDesde,
+  periodoHasta: r.periodoHasta,
+  totalVendido: r.totalVendido,
+  unidadesVendidas: r.unidadesVendidas,
+  comisionTipo: r.comisionTipo,
+  comisionValor: r.comisionValor,
+  comisionCalculada: r.comisionCalculada,
+  comisionFinal: r.comisionFinal,
+  comisionNota: r.comisionNota,
+  descuentosTotal: r.descuentosTotal,
+  neto: r.neto,
+  usuarioId: r.usuarioId,
+  usuarioNombre: r.usuarioNombre,
+  creadoEn: r.creadoEn.toISOString(),
+  renglones,
+  conceptos,
+});
+
+export const ajusteProductor = (r: Fila<typeof e.ajustesProductor>): AjusteProductor => ({
+  id: r.id,
+  proveedorId: r.proveedorId,
+  tipo: r.tipo,
+  categoria: r.categoria,
+  concepto: r.concepto,
+  monto: r.monto,
+  ventaId: r.ventaId,
+  usuarioId: r.usuarioId,
+  usuarioNombre: r.usuarioNombre,
+  creadoEn: r.creadoEn.toISOString(),
+});
+

@@ -65,6 +65,7 @@ export const esquemaCliente = z.object({
 
 export const CATEGORIAS = {
   pago_proveedor: 'egreso',
+  anticipo_productor: 'egreso',
   flete: 'egreso',
   sueldo: 'egreso',
   otro_egreso: 'egreso',

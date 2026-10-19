@@ -25,12 +25,16 @@ import type {
   UsuarioNegocio,
 } from '@micentralmx/shared/api';
 import type {
+  AjusteProductor,
   Carga,
   Clasificacion,
   Cliente,
   Compra,
   ConfiguracionNegocio,
   ExistenciaCarga,
+  Liquidacion,
+  LiquidacionConcepto,
+  LiquidacionRenglon,
   MovimientoDinero,
   MovimientoInventario,
   Negocio,
@@ -84,6 +88,10 @@ const TABLAS_PULL = [
   'compras',
   'movimientosInventario',
   'movimientosDinero',
+  'liquidaciones',
+  'liquidacionRenglones',
+  'liquidacionConceptos',
+  'ajustesProductor',
 ] as const;
 
 // ── Acceso a datos ──────────────────────────────────────────────────────────
@@ -134,8 +142,9 @@ async function inicializar() {
   await fijarValor('configuracion', s.configuracion);
   await fijarValor('siguienteFolio', s.siguienteFolio);
   for (const tabla of TABLAS_PULL) {
-    for (const fila of s[tabla] as Array<{ id?: string; clasificacionId?: string }>) {
-      await guardar(tabla, (fila.id ?? fila.clasificacionId)!, fila);
+    for (const fila of (s[tabla] ?? []) as Array<any>) {
+      const id = fila.id ?? fila.clasificacionId ?? (fila.liquidacionId != null && fila.linea != null ? `${fila.liquidacionId}:${fila.linea}` : nuevoId());
+      await guardar(tabla, id, fila);
     }
   }
   for (const x of s.usuarios) await guardar('usuarios', x.id, x);
@@ -598,24 +607,46 @@ ruta('POST', '/ventas/:id/cancelar', async ({ cuerpo, usuario, params }) => {
   const ahora = new Date().toISOString();
   for (const r of v.renglones) {
     let cargaIdDevolver = r.cargaId ?? null;
-    let motivoRenglon = cuerpo.motivo ?? null;
     if (r.cargaId) {
       const carga = await obtener<Carga>('cargas', r.cargaId);
       if (carga) {
         if (carga.estado === 'cerrada') {
-          const tieneLiquidadas = (carga as any).liquidada === true;
-          if (!tieneLiquidadas) {
-            await guardar('cargas', carga.id, { ...carga, estado: 'abierta', cerradaEn: null });
-            cargaIdDevolver = r.cargaId;
-          } else {
-            cargaIdDevolver = null;
-            motivoRenglon = (cuerpo.motivo ? cuerpo.motivo + ' - ' : '') + 'Carga liquidada: devuelto a existencia general';
-          }
+          await guardar('cargas', carga.id, { ...carga, estado: 'abierta', cerradaEn: null });
         }
+        cargaIdDevolver = r.cargaId;
       }
     }
-    await moverExistencia(r.clasificacionId, r.productoId, r.cantidad, 'cancelacion', `Venta ${folioVenta(v)}`, motivoRenglon, usuario.nombre, ahora, nuevoId(), cargaIdDevolver);
+    await moverExistencia(r.clasificacionId, r.productoId, r.cantidad, 'cancelacion', `Venta ${folioVenta(v)}`, cuerpo.motivo ?? null, usuario.nombre, ahora, nuevoId(), cargaIdDevolver);
   }
+
+  // Si algún renglón de la venta estaba cortado, crear cargo en ajustesProductor
+  const liqRenglones = await todos<LiquidacionRenglon>('liquidacionRenglones');
+  const liqs = await todos<Liquidacion>('liquidaciones');
+  const cortados = liqRenglones.filter((lr) => lr.ventaId === v.id);
+  for (const rc of cortados) {
+    const liq = liqs.find((l) => l.id === rc.liquidacionId);
+    if (liq) {
+      const totalV = D(liq.totalVendido);
+      const tasaEfectiva = totalV.gt(0) ? D(liq.comisionFinal).div(totalV) : D(0);
+      const montoCargo = aImporte(D(rc.importe).mul(D(1).minus(tasaEfectiva)));
+      if (D(montoCargo).gt(0)) {
+        const ajusteId = nuevoId();
+        await guardar('ajustesProductor', ajusteId, {
+          id: ajusteId,
+          proveedorId: liq.proveedorId,
+          tipo: 'cargo',
+          categoria: 'cancelacion',
+          concepto: `Cancelación Venta ${folioVenta(v)} · Corte #${liq.folio}`,
+          monto: montoCargo,
+          ventaId: v.id,
+          usuarioId: usuario.id,
+          usuarioNombre: usuario.nombre,
+          creadoEn: ahora,
+        } satisfies AjusteProductor);
+      }
+    }
+  }
+
   await guardar('ventas', v.id, { ...v, estado: 'cancelada', canceladaEn: ahora });
   await auditar(usuario.nombre, 'ventas', `${usuario.nombre} canceló la venta ${folioVenta(v)}${cuerpo.motivo ? `: ${cuerpo.motivo}` : ''}`);
   return ok();
@@ -648,7 +679,16 @@ const guardarProveedor: Manejador = async ({ cuerpo, usuario, params }) => {
   if (e) return e;
   if (!String(cuerpo.nombre ?? '').trim()) return error(422, 'Escribe el nombre del proveedor.');
   const id = params[0] ?? nuevoId();
-  const p: Proveedor = { id, nombre: cuerpo.nombre.trim(), telefono: cuerpo.telefono || null, productos: cuerpo.productos ?? '', tipo: cuerpo.tipo ?? 'tercero', archivadoEn: null };
+  const p: Proveedor = {
+    id,
+    nombre: cuerpo.nombre.trim(),
+    telefono: cuerpo.telefono || null,
+    productos: cuerpo.productos ?? '',
+    tipo: cuerpo.tipo ?? 'tercero',
+    comisionTipo: cuerpo.comisionTipo ?? null,
+    comisionValor: cuerpo.comisionValor ? aImporte(cuerpo.comisionValor) : null,
+    archivadoEn: null,
+  };
   await guardar('proveedores', id, p);
   await auditar(usuario.nombre, 'compras', `${usuario.nombre} ${params[0] ? 'editó' : 'agregó'} al proveedor ${p.nombre}`);
   return ok(p);
@@ -813,6 +853,484 @@ ruta('GET', '/reportes/resumen', async ({ query, usuario }) => {
   const e = exigir(usuario, await permisos(usuario), 'reportes.ver');
   if (e) return e;
   return ok(await resumen(query.get('desde') ?? diaLocal(), query.get('hasta') ?? diaLocal()));
+});
+
+// ── Liquidaciones y estado de cuenta de productores ─────────────────────────
+
+ruta('GET', '/liquidaciones/pendientes', async ({ query, usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'liquidaciones.ver');
+  if (e) return e;
+  const proveedorId = query.get('proveedorId');
+  if (!proveedorId) return error(422, 'Falta proveedorId');
+  const prov = await obtener<Proveedor>('proveedores', proveedorId);
+  if (!prov) return error(404, 'El proveedor no existe.');
+  if (prov.tipo === 'rancho_propio') {
+    return ok({ proveedor: prov, cargas: [], renglones: [], mermas: [], anticiposEntregados: '0.00' });
+  }
+
+  const cargas = (await todos<Carga>('cargas')).filter((c) => c.proveedorId === proveedorId);
+  const cargasIds = new Set(cargas.map((c) => c.id));
+  const mapaCargas = new Map(cargas.map((c) => [c.id, c]));
+
+  const cortados = await todos<LiquidacionRenglon>('liquidacionRenglones');
+  const cortadosClaves = new Set(cortados.map((cr) => `${cr.ventaId}:${cr.linea}`));
+
+  const ventas = (await todos<Venta>('ventas')).filter((v) => v.estado !== 'cancelada');
+  const renglones: any[] = [];
+  for (const v of ventas) {
+    for (const [linea, r] of v.renglones.entries()) {
+      if (r.cargaId && cargasIds.has(r.cargaId) && !cortadosClaves.has(`${v.id}:${linea}`)) {
+        const c = mapaCargas.get(r.cargaId);
+        renglones.push({
+          ventaId: v.id,
+          folioVenta: v.folio,
+          fechaVenta: v.creadoEnDispositivo,
+          linea,
+          clasificacionNombre: r.clasificacionNombre,
+          cantidad: r.cantidad,
+          unidadNombre: r.unidadNombre,
+          precio: r.precio,
+          importe: r.importe,
+          cargaId: r.cargaId,
+          fechaCarga: c?.fecha ?? null,
+          comisionTipo: c?.comisionTipo ?? prov.comisionTipo ?? null,
+          comisionValor: c?.comisionValor ?? prov.comisionValor ?? null,
+        });
+      }
+    }
+  }
+
+  const movs = await todos<MovimientoInventario>('movimientosInventario');
+  const mermasMovs = movs.filter((m) => m.tipo === 'merma' && m.cargaId && cargasIds.has(m.cargaId));
+  const mermas = mermasMovs.map((m) => ({
+    id: m.id,
+    cargaId: m.cargaId!,
+    fecha: m.creadoEn,
+    clasificacionNombre: 'Merma',
+    cantidad: D(m.delta).abs().toString(),
+    unidadNombre: 'unidades',
+    motivo: m.motivo,
+    montoSugerido: aImporte(D(m.delta).abs().mul(100)),
+  }));
+
+  const dinero = await todos<MovimientoDinero>('movimientosDinero');
+  const anticipos = dinero.filter((m) => m.proveedorId === proveedorId && m.categoria === 'anticipo_productor');
+  const anticiposEntregados = aImporte(sumar(anticipos.map((a) => a.monto)));
+
+  return ok({
+    proveedor: prov,
+    cargas: cargas.map((c) => ({ id: c.id, fecha: c.fecha, estado: c.estado, comisionTipo: c.comisionTipo, comisionValor: c.comisionValor })),
+    renglones,
+    mermas,
+    anticiposEntregados,
+  });
+});
+
+ruta('POST', '/liquidaciones', async ({ cuerpo, usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'liquidaciones.gestionar');
+  if (e) return e;
+  const b = cuerpo;
+  const prov = await obtener<Proveedor>('proveedores', b.proveedorId);
+  if (!prov) return error(404, 'El proveedor no existe.');
+  if (prov.tipo === 'rancho_propio') return error(409, 'Los ranchos propios no generan liquidaciones.');
+
+  const folio = ((await valor<number>('folio_liquidacion')) ?? 1) + 1;
+  await fijarValor('folio_liquidacion', folio);
+
+  const liquidacionId = nuevoId();
+  const ahora = new Date().toISOString();
+
+  let totalVendidoD = D(0);
+  let unidadesVendidasD = D(0);
+  const renglonesInsertar: LiquidacionRenglon[] = [];
+
+  const ventas = await todos<Venta>('ventas');
+  for (const [idx, item] of b.renglones.entries()) {
+    const v = ventas.find((x) => x.id === item.ventaId);
+    if (!v) return error(404, `Venta ${item.ventaId} no encontrada.`);
+    const r = v.renglones[item.linea];
+    if (!r) return error(404, `Renglón ${item.linea} de la venta no encontrado.`);
+    totalVendidoD = totalVendidoD.plus(r.importe);
+    unidadesVendidasD = unidadesVendidasD.plus(r.cantidad);
+    renglonesInsertar.push({
+      liquidacionId,
+      linea: idx + 1,
+      ventaId: v.id,
+      cargaId: r.cargaId ?? null,
+      importe: r.importe,
+      unidades: r.cantidad,
+    });
+  }
+
+  const comisionCalculadaD =
+    b.comisionTipo === 'porcentaje' ? totalVendidoD.mul(b.comisionValor).div(100) : unidadesVendidasD.mul(b.comisionValor);
+  const comisionCalculada = aImporte(comisionCalculadaD);
+  const comisionFinal = aImporte(b.comisionFinal);
+
+  if (!D(comisionFinal).equals(D(comisionCalculada)) && !b.comisionNota?.trim()) {
+    return error(422, 'Se requiere una nota explicativa cuando la comisión final difiere de la calculada.', 'nota_obligatoria');
+  }
+
+  const descuentosTotal = aImporte(sumar((b.conceptos ?? []).map((c: any) => D(c.monto))));
+  const totalVendido = aImporte(totalVendidoD);
+  const unidadesVendidas = aImporte(unidadesVendidasD);
+  const neto = aImporte(D(totalVendido).minus(D(comisionFinal)).minus(D(descuentosTotal)));
+
+  const liq: Liquidacion = {
+    id: liquidacionId,
+    folio,
+    proveedorId: b.proveedorId,
+    periodoDesde: b.periodoDesde ?? null,
+    periodoHasta: b.periodoHasta ?? null,
+    totalVendido,
+    unidadesVendidas,
+    comisionTipo: b.comisionTipo,
+    comisionValor: aImporte(b.comisionValor),
+    comisionCalculada,
+    comisionFinal,
+    comisionNota: b.comisionNota?.trim() || null,
+    descuentosTotal,
+    neto,
+    usuarioId: usuario.id,
+    usuarioNombre: usuario.nombre,
+    creadoEn: ahora,
+  };
+
+  await guardar('liquidaciones', liquidacionId, liq);
+  for (const r of renglonesInsertar) {
+    await guardar('liquidacionRenglones', `${r.liquidacionId}:${r.linea}`, r);
+  }
+  const conceptosInsertar: LiquidacionConcepto[] = (b.conceptos ?? []).map((c: any, idx: number) => ({
+    liquidacionId,
+    linea: idx + 1,
+    tipo: c.tipo,
+    concepto: c.concepto.trim(),
+    monto: aImporte(c.monto),
+  }));
+  for (const c of conceptosInsertar) {
+    await guardar('liquidacionConceptos', `${c.liquidacionId}:${c.linea}`, c);
+  }
+
+  await auditar(
+    usuario.nombre,
+    'liquidaciones',
+    `${usuario.nombre} emitió el corte #L-${String(folio).padStart(4, '0')} para ${prov.nombre} por neto de ${formatoMXN(neto)}`,
+  );
+  return ok({ ...liq, renglones: renglonesInsertar, conceptos: conceptosInsertar });
+});
+
+ruta('POST', '/ajustes-productor', async ({ cuerpo, usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'liquidaciones.gestionar');
+  if (e) return e;
+  const b = cuerpo;
+  const prov = await obtener<Proveedor>('proveedores', b.proveedorId);
+  if (!prov) return error(404, 'El proveedor no existe.');
+  if (prov.tipo === 'rancho_propio') return error(409, 'Los ranchos propios no tienen ajustes.');
+
+  const id = nuevoId();
+  const monto = aImporte(b.monto);
+  const ajuste: AjusteProductor = {
+    id,
+    proveedorId: b.proveedorId,
+    tipo: b.tipo,
+    categoria: b.categoria,
+    concepto: b.concepto.trim(),
+    monto,
+    ventaId: b.ventaId ?? null,
+    usuarioId: usuario.id,
+    usuarioNombre: usuario.nombre,
+    creadoEn: new Date().toISOString(),
+  };
+
+  await guardar('ajustesProductor', id, ajuste);
+  await auditar(
+    usuario.nombre,
+    'liquidaciones',
+    `${usuario.nombre} registró un ${b.tipo} de ${formatoMXN(monto)} a ${prov.nombre} (${b.concepto})`,
+  );
+  return ok(ajuste);
+});
+
+ruta('GET', '/proveedores/:id/estado-cuenta', async ({ params, usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'liquidaciones.ver');
+  if (e) return e;
+  const proveedorId = params[0];
+  const prov = await obtener<Proveedor>('proveedores', proveedorId);
+  if (!prov) return error(404, 'El productor no existe.');
+  if (prov.tipo === 'rancho_propio') {
+    return ok({
+      proveedor: prov,
+      saldo: '0.00',
+      totalLiquidado: '0.00',
+      totalPagos: '0.00',
+      totalAnticipos: '0.00',
+      totalCargos: '0.00',
+      totalAbonos: '0.00',
+      items: [],
+    });
+  }
+
+  const cortes = (await todos<Liquidacion>('liquidaciones')).filter((l) => l.proveedorId === proveedorId);
+  cortes.sort((a, b) => new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime());
+
+  const dinero = (await todos<MovimientoDinero>('movimientosDinero')).filter(
+    (m) => m.proveedorId === proveedorId && (m.categoria === 'pago_proveedor' || m.categoria === 'anticipo_productor'),
+  );
+  dinero.sort((a, b) => new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime());
+
+  const ajustes = (await todos<AjusteProductor>('ajustesProductor')).filter((a) => a.proveedorId === proveedorId);
+  ajustes.sort((a, b) => new Date(a.creadoEn).getTime() - new Date(b.creadoEn).getTime());
+
+  let fondoPagos = sumar(dinero.map((d) => D(d.monto)));
+  const estadoPorCorte = new Map<string, { estado: 'pendiente' | 'parcial' | 'pagado'; pagado: string; pendiente: string }>();
+  for (const c of cortes) {
+    const netoC = D(c.neto);
+    if (fondoPagos.gte(netoC)) {
+      estadoPorCorte.set(c.id, { estado: 'pagado', pagado: aImporte(netoC), pendiente: '0.00' });
+      fondoPagos = fondoPagos.minus(netoC);
+    } else if (fondoPagos.gt(0)) {
+      estadoPorCorte.set(c.id, {
+        estado: 'parcial',
+        pagado: aImporte(fondoPagos),
+        pendiente: aImporte(netoC.minus(fondoPagos)),
+      });
+      fondoPagos = D(0);
+    } else {
+      estadoPorCorte.set(c.id, { estado: 'pendiente', pagado: '0.00', pendiente: aImporte(netoC) });
+    }
+  }
+
+  const eventos: any[] = [];
+  for (const c of cortes) {
+    const ec = estadoPorCorte.get(c.id);
+    eventos.push({
+      id: c.id,
+      fecha: c.creadoEn,
+      tipo: 'corte',
+      concepto: `Corte de cuenta #L-${String(c.folio).padStart(4, '0')}`,
+      monto: c.neto,
+      signo: '+',
+      delta: D(c.neto),
+      folio: c.folio,
+      estadoCorte: ec?.estado,
+      montoPagadoCorte: ec?.pagado,
+      montoPendienteCorte: ec?.pendiente,
+      usuarioNombre: c.usuarioNombre,
+    });
+  }
+  for (const d of dinero) {
+    const esAnt = d.categoria === 'anticipo_productor';
+    eventos.push({
+      id: d.id,
+      fecha: d.creadoEn,
+      tipo: esAnt ? 'anticipo' : 'pago',
+      concepto: d.concepto,
+      monto: d.monto,
+      signo: '−',
+      delta: D(d.monto).neg(),
+      usuarioNombre: d.usuarioNombre,
+    });
+  }
+  for (const a of ajustes) {
+    const esCargo = a.tipo === 'cargo';
+    eventos.push({
+      id: a.id,
+      fecha: a.creadoEn,
+      tipo: a.tipo,
+      concepto: `Ajuste (${a.categoria}): ${a.concepto}`,
+      monto: a.monto,
+      signo: esCargo ? '−' : '+',
+      delta: esCargo ? D(a.monto).neg() : D(a.monto),
+      usuarioNombre: a.usuarioNombre,
+    });
+  }
+  eventos.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+  let saldoCorrido = D(0);
+  const items = eventos.map((ev) => {
+    saldoCorrido = saldoCorrido.plus(ev.delta);
+    return {
+      id: ev.id,
+      fecha: ev.fecha,
+      tipo: ev.tipo,
+      concepto: ev.concepto,
+      monto: ev.monto,
+      signo: ev.signo,
+      saldo: aImporte(saldoCorrido),
+      folio: ev.folio,
+      estadoCorte: ev.estadoCorte,
+      montoPagadoCorte: ev.montoPagadoCorte,
+      montoPendienteCorte: ev.montoPendienteCorte,
+      usuarioNombre: ev.usuarioNombre,
+    };
+  });
+
+  return ok({
+    proveedor: prov,
+    saldo: aImporte(saldoCorrido),
+    totalLiquidado: aImporte(sumar(cortes.map((c) => D(c.neto)))),
+    totalPagos: aImporte(sumar(dinero.filter((d) => d.categoria === 'pago_proveedor').map((d) => D(d.monto)))),
+    totalAnticipos: aImporte(sumar(dinero.filter((d) => d.categoria === 'anticipo_productor').map((d) => D(d.monto)))),
+    totalCargos: aImporte(sumar(ajustes.filter((a) => a.tipo === 'cargo').map((a) => D(a.monto)))),
+    totalAbonos: aImporte(sumar(ajustes.filter((a) => a.tipo === 'abono').map((a) => D(a.monto)))),
+    items,
+  });
+});
+
+ruta('GET', '/proveedores/saldos', async ({ usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'liquidaciones.ver');
+  if (e) return e;
+  const provs = (await todos<Proveedor>('proveedores')).filter((p) => !p.archivadoEn);
+  const cortes = await todos<Liquidacion>('liquidaciones');
+  const dinero = await todos<MovimientoDinero>('movimientosDinero');
+  const ajustes = await todos<AjusteProductor>('ajustesProductor');
+
+  const resultado = [];
+  for (const p of provs) {
+    if (p.tipo === 'rancho_propio') {
+      resultado.push({ proveedorId: p.id, nombre: p.nombre, tipo: p.tipo, saldo: '0.00', porPagar: '0.00', saldoAFavorComerciante: '0.00' });
+      continue;
+    }
+    const liqNeto = sumar(cortes.filter((c) => c.proveedorId === p.id).map((c) => D(c.neto)));
+    const abonos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'abono').map((a) => D(a.monto)));
+    const cargos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'cargo').map((a) => D(a.monto)));
+    const pagos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'pago_proveedor').map((d) => D(d.monto)));
+    const anticipos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'anticipo_productor').map((d) => D(d.monto)));
+
+    const saldo = liqNeto.plus(abonos).minus(cargos).minus(pagos).minus(anticipos);
+    const saldoStr = aImporte(saldo);
+    resultado.push({
+      proveedorId: p.id,
+      nombre: p.nombre,
+      tipo: p.tipo,
+      saldo: saldoStr,
+      porPagar: saldo.gt(0) ? saldoStr : '0.00',
+      saldoAFavorComerciante: saldo.lt(0) ? aImporte(saldo.abs()) : '0.00',
+    });
+  }
+  return ok(resultado);
+});
+
+ruta('PATCH', '/cargas/:id/comision', async ({ cuerpo, params, usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'cargas.registrar');
+  if (e) return e;
+  const carga = await obtener<Carga>('cargas', params[0]);
+  if (!carga) return error(404, 'La carga no existe.');
+  const cortados = await todos<LiquidacionRenglon>('liquidacionRenglones');
+  if (cortados.some((cr) => cr.cargaId === carga.id)) {
+    return error(409, 'La carga ya tiene ventas incluidas en un corte y su comisión no puede modificarse.');
+  }
+  await guardar('cargas', carga.id, {
+    ...carga,
+    comisionTipo: cuerpo.comisionTipo ?? null,
+    comisionValor: cuerpo.comisionValor ? aImporte(cuerpo.comisionValor) : null,
+  });
+  return ok({ ok: true });
+});
+
+ruta('GET', '/reportes/productores', async ({ query, usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'reportes.ver');
+  if (e) return e;
+  const desde = query.get('desde') ?? '';
+  const hasta = query.get('hasta') ?? '';
+  const agrupacion = query.get('agrupacion') ?? 'mes';
+
+  const provs = (await todos<Proveedor>('proveedores')).filter((p) => p.tipo === 'tercero' && !p.archivadoEn);
+  const cortes = await todos<Liquidacion>('liquidaciones');
+  const dinero = await todos<MovimientoDinero>('movimientosDinero');
+  const ajustes = await todos<AjusteProductor>('ajustesProductor');
+
+  let porPagarTotalD = D(0);
+  const mapaProd = new Map<string, any>();
+  for (const p of provs) {
+    const liqNeto = sumar(cortes.filter((c) => c.proveedorId === p.id).map((c) => D(c.neto)));
+    const abonos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'abono').map((a) => D(a.monto)));
+    const cargos = sumar(ajustes.filter((a) => a.proveedorId === p.id && a.tipo === 'cargo').map((a) => D(a.monto)));
+    const pagos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'pago_proveedor').map((d) => D(d.monto)));
+    const anticipos = sumar(dinero.filter((d) => d.proveedorId === p.id && d.categoria === 'anticipo_productor').map((d) => D(d.monto)));
+    const saldo = liqNeto.plus(abonos).minus(cargos).minus(pagos).minus(anticipos);
+    if (saldo.gt(0)) porPagarTotalD = porPagarTotalD.plus(saldo);
+
+    mapaProd.set(p.id, {
+      proveedorId: p.id,
+      nombre: p.nombre,
+      totalVendido: D(0),
+      unidadesVendidas: D(0),
+      comisionGanada: D(0),
+      netoLiquidado: D(0),
+      cortes: 0,
+      saldoActual: aImporte(saldo),
+    });
+  }
+
+  const enRango = (iso: string) => {
+    if (!desde || !hasta) return true;
+    const d = diaLocal(iso);
+    return d >= desde && d <= hasta;
+  };
+
+  const mapaPeriodos = new Map<string, any>();
+  for (const l of cortes.filter((c) => enRango(c.creadoEn))) {
+    const p = mapaProd.get(l.proveedorId);
+    if (p) {
+      p.totalVendido = p.totalVendido.plus(l.totalVendido);
+      p.unidadesVendidas = p.unidadesVendidas.plus(l.unidadesVendidas);
+      p.comisionGanada = p.comisionGanada.plus(l.comisionFinal);
+      p.netoLiquidado = p.netoLiquidado.plus(l.neto);
+      p.cortes += 1;
+    }
+
+    const f = new Date(l.creadoEn);
+    let clave = '';
+    if (agrupacion === 'semana') {
+      const anyo = f.getFullYear();
+      const primero = new Date(anyo, 0, 1);
+      const dias = Math.floor((f.getTime() - primero.getTime()) / (24 * 60 * 60 * 1000));
+      const semana = Math.ceil((dias + primero.getDay() + 1) / 7);
+      clave = `${anyo}-Semana ${semana}`;
+    } else if (agrupacion === 'quincena') {
+      const anyo = f.getFullYear();
+      const mes = String(f.getMonth() + 1).padStart(2, '0');
+      const quincena = f.getDate() <= 15 ? 'Q1' : 'Q2';
+      clave = `${anyo}-${mes} ${quincena}`;
+    } else {
+      const anyo = f.getFullYear();
+      const mes = String(f.getMonth() + 1).padStart(2, '0');
+      clave = `${anyo}-${mes}`;
+    }
+
+    const prev = mapaPeriodos.get(clave) ?? { totalVendido: D(0), comisionGanada: D(0), netoLiquidado: D(0), cortes: 0 };
+    prev.totalVendido = prev.totalVendido.plus(l.totalVendido);
+    prev.comisionGanada = prev.comisionGanada.plus(l.comisionFinal);
+    prev.netoLiquidado = prev.netoLiquidado.plus(l.neto);
+    prev.cortes += 1;
+    mapaPeriodos.set(clave, prev);
+  }
+
+  return ok({
+    desde,
+    hasta,
+    porPagarTotal: aImporte(porPagarTotalD),
+    productores: Array.from(mapaProd.values()).map((p) => ({
+      proveedorId: p.proveedorId,
+      nombre: p.nombre,
+      totalVendido: aImporte(p.totalVendido),
+      unidadesVendidas: aImporte(p.unidadesVendidas),
+      comisionGanada: aImporte(p.comisionGanada),
+      netoLiquidado: aImporte(p.netoLiquidado),
+      cortes: p.cortes,
+      saldoActual: p.saldoActual,
+    })),
+    periodos: Array.from(mapaPeriodos.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([periodo, v]) => ({
+        periodo,
+        totalVendido: aImporte(v.totalVendido),
+        comisionGanada: aImporte(v.comisionGanada),
+        netoLiquidado: aImporte(v.netoLiquidado),
+        cortes: v.cortes,
+      })),
+  });
 });
 
 // ── Revisiones ──────────────────────────────────────────────────────────────

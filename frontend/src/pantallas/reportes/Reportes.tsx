@@ -1,22 +1,29 @@
 import { useQuery } from '@tanstack/react-query';
-import { ChartColumn, HandCoins, Package, PackageMinus, Receipt, ShoppingCart, Wallet, type LucideIcon } from 'lucide-react';
+import { ChartColumn, HandCoins, Package, PackageMinus, Receipt, ShoppingCart, Truck, Wallet, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { api } from '../../api/cliente';
 import { ErrorConsulta, Esqueleto } from '../../componentes/Estados';
 import { Campo, Chips } from '../../componentes/Formulario';
-import type { ResumenReportes } from '@micentralmx/shared/api';
+import type { ReporteProductores, ResumenReportes } from '@micentralmx/shared/api';
 import { useFormato } from '../../hooks/useFormato';
 import { EncabezadoPagina, EncabezadoSecundario } from '../../layout/Encabezados';
-import { D, formatoMXN, formatoMXNSigno } from '../../lib/dinero';
+import { D, formatoCantidad, formatoMXN, formatoMXNSigno, sumar } from '../../lib/dinero';
 import { diaLocal, formatoDia, sumarDias } from '../../lib/fechas';
 import { useConectividad } from '../../sync/conectividad';
 
-type Periodo = 'hoy' | 'semana' | 'mes' | 'rango';
+type Periodo = 'hoy' | 'semana' | 'quincena' | 'mes' | 'rango';
 
 function rango(p: Periodo, desde: string, hasta: string): [string, string] {
   const hoy = diaLocal();
   if (p === 'hoy') return [hoy, hoy];
   if (p === 'semana') return [sumarDias(hoy, -6), hoy];
+  if (p === 'quincena') {
+    const dia = Number(hoy.slice(8, 10));
+    const añoMes = hoy.slice(0, 8);
+    const inicioQ = dia <= 15 ? `${añoMes}01` : `${añoMes}16`;
+    return [inicioQ, hoy];
+  }
   if (p === 'mes') return [`${hoy.slice(0, 8)}01`, hoy];
   return [desde, hasta];
 }
@@ -46,11 +53,20 @@ export default function Reportes() {
   const [desde, setDesde] = useState(sumarDias(diaLocal(), -6));
   const [hasta, setHasta] = useState(diaLocal());
   const [d, h] = rango(periodo, desde, hasta);
+
   const q = useQuery({
     queryKey: ['reportes', d, h],
     queryFn: () => api<ResumenReportes>('GET', `/reportes/resumen?desde=${d}&hasta=${h}`),
   });
+
+  const qProd = useQuery({
+    queryKey: ['reportes-productores', d, h],
+    queryFn: () => api<ReporteProductores>('GET', `/reportes/productores?desde=${d}&hasta=${h}`),
+  });
+
   const r = q.data;
+  const rp = qProd.data;
+  const totalComisionGanada = rp ? sumar(rp.productores.map((p) => p.comisionGanada)) : D(0);
 
   return (
     <>
@@ -64,6 +80,7 @@ export default function Reportes() {
             opciones={[
               { valor: 'hoy', texto: 'Hoy' },
               { valor: 'semana', texto: 'Esta semana' },
+              { valor: 'quincena', texto: 'Esta quincena' },
               { valor: 'mes', texto: 'Este mes' },
               { valor: 'rango', texto: 'Elegir fechas' },
             ]}
@@ -81,6 +98,7 @@ export default function Reportes() {
           <p className="t-2 num">
             Del {formatoDia(d)} al {formatoDia(h)}
           </p>
+
           {q.isPending ? (
             <Esqueleto filas={3} texto="Cargando reportes…" />
           ) : q.isError ? (
@@ -102,6 +120,96 @@ export default function Reportes() {
               </div>
             )
           )}
+
+          {/* Sección: Productores y Comisiones */}
+          <div className="card pila-12" style={{ padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Truck className="ic" style={{ color: 'var(--primario)' }} />
+              <p style={{ fontWeight: 600, fontSize: 16 }}>Productores y comisiones de consigna</p>
+            </div>
+
+            {qProd.isPending ? (
+              <Esqueleto filas={2} />
+            ) : qProd.isError ? (
+              <ErrorConsulta error={qProd.error} enLinea={enLinea} reintentar={() => void qProd.refetch()} />
+            ) : rp ? (
+              <>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: 12,
+                    padding: '12px 0',
+                    borderBottom: '1px solid var(--borde)',
+                  }}
+                >
+                  <div>
+                    <p className="t-aux">Por pagar a productores</p>
+                    <p className="num" style={{ fontSize: 20, fontWeight: 700, color: 'var(--peligro, #dc2626)' }}>
+                      {formatoMXN(rp.porPagarTotal)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="t-aux">Comisión ganada del comercio</p>
+                    <p className="num" style={{ fontSize: 20, fontWeight: 700, color: 'var(--exito, #16a34a)' }}>
+                      {formatoMXN(totalComisionGanada)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pila-8" style={{ marginTop: 8 }}>
+                  <p className="t-aux" style={{ fontWeight: 600 }}>Desglose por productor en el periodo:</p>
+                  {rp.productores.length === 0 ? (
+                    <p className="t-aux" style={{ textAlign: 'center', padding: '12px 0' }}>
+                      No hubo ventas de productores externos en este periodo.
+                    </p>
+                  ) : (
+                    rp.productores.map((prod) => (
+                      <div
+                        key={prod.proveedorId}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 10px',
+                          borderRadius: 6,
+                          background: 'var(--fondo-superficie)',
+                        }}
+                      >
+                        <div>
+                          <Link
+                            to={`/proveedores/${prod.proveedorId}`}
+                            style={{ fontWeight: 600, fontSize: 14, color: 'var(--texto)' }}
+                          >
+                            {prod.nombre}
+                          </Link>
+                          <p className="t-aux" style={{ fontSize: 12 }}>
+                            Vendido: {formatoMXN(prod.totalVendido)} ({formatoCantidad(prod.unidadesVendidas)} unid.) · Comisión:{' '}
+                            <span style={{ color: 'var(--exito, #16a34a)', fontWeight: 600 }}>
+                              {formatoMXN(prod.comisionGanada)}
+                            </span>
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p className="t-aux">Saldo por pagar</p>
+                          <p
+                            className="num"
+                            style={{
+                              fontWeight: 600,
+                              color: D(prod.saldoActual).gt(0) ? 'var(--peligro, #dc2626)' : 'var(--texto-tenue)',
+                            }}
+                          >
+                            {formatoMXN(prod.saldoActual)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            ) : null}
+          </div>
+
           <p className="hint" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <ChartColumn className="ic" style={{ width: 14, height: 14 }} />
             Reportes calculados en el servidor con la fecha del dispositivo de cada operación. Mermas valoradas con el último costo de compra.
@@ -111,3 +219,4 @@ export default function Reportes() {
     </>
   );
 }
+

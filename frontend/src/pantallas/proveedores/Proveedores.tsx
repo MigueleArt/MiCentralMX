@@ -6,24 +6,25 @@ import { useSesionActiva } from '../../auth/SesionContext';
 import { EstadoVacio, Esqueleto } from '../../componentes/Estados';
 import { Buscador, coincide } from '../../componentes/Formulario';
 import { db } from '../../db/db';
+import { saldosProductoresLocales } from '../../dominio/consultas';
 import { EncabezadoSecundario } from '../../layout/Encabezados';
-import { formatoRelativo } from '../../lib/fechas';
+import { formatoMXN } from '../../lib/dinero';
 
-/** Pantalla 22 · Proveedores. */
+/** Pantalla 22 · Proveedores y ranchos. */
 export default function Proveedores() {
   const { puede } = useSesionActiva();
   const [q, setQ] = useState('');
   const datos = useLiveQuery(async () => {
-    const [proveedores, compras] = await Promise.all([db.proveedores.toArray(), db.compras.toArray()]);
+    const [proveedores, saldos] = await Promise.all([
+      db.proveedores.toArray(),
+      saldosProductoresLocales(),
+    ]);
+    const saldosMap = new Map(saldos.map((s) => [s.proveedorId, s]));
     return proveedores
       .filter((p) => !p.archivadoEn)
       .map((p) => ({
         p,
-        ultima: compras
-          .filter((c) => c.proveedorId === p.id)
-          .map((c) => c.creadoEnDispositivo)
-          .sort()
-          .pop(),
+        saldoInfo: saldosMap.get(p.id),
       }))
       .sort((a, b) => a.p.nombre.localeCompare(b.p.nombre, 'es'));
   });
@@ -42,7 +43,8 @@ export default function Proveedores() {
             <EstadoVacio titulo="Sin resultados" texto={`No hay registros que coincidan con “${q}”.`} />
           ) : (
             <div className="card" style={{ overflow: 'hidden' }}>
-              {lista.map(({ p, ultima }) => {
+              {lista.map(({ p, saldoInfo }) => {
+                const saldo = saldoInfo?.saldo;
                 const cuerpo = (
                   <>
                     <span className="ib">
@@ -65,23 +67,29 @@ export default function Proveedores() {
                       </div>
                       <p className="t-aux">{p.productos || 'Sin productos registrados'}</p>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p className="t-aux">Última compra</p>
-                      <p className="t-2 num" style={{ fontWeight: 600, color: 'var(--texto)' }}>
-                        {ultima ? formatoRelativo(ultima).replace(/^Hoy .*/, 'Hoy') : '—'}
-                      </p>
-                    </div>
-                    {puede('proveedores.gestionar') && <ChevronRight className="ic" />}
+                    {p.tipo === 'tercero' && saldo != null && (
+                      <div style={{ textAlign: 'right' }}>
+                        <p className="t-aux">
+                          {saldo.lt(0) ? 'A favor' : 'Por pagar'}
+                        </p>
+                        <p
+                          className="t-2 num"
+                          style={{
+                            fontWeight: 600,
+                            color: saldo.gt(0) ? 'var(--peligro, #dc2626)' : 'var(--texto-tenue)',
+                          }}
+                        >
+                          {formatoMXN(saldo.abs())}
+                        </p>
+                      </div>
+                    )}
+                    <ChevronRight className="ic" />
                   </>
                 );
-                return puede('proveedores.gestionar') ? (
-                  <Link key={p.id} className="rowlink" to={`/proveedores/${p.id}/editar`}>
+                return (
+                  <Link key={p.id} className="rowlink" to={`/proveedores/${p.id}`}>
                     {cuerpo}
                   </Link>
-                ) : (
-                  <div key={p.id} className="rowlink" style={{ cursor: 'default' }}>
-                    {cuerpo}
-                  </div>
                 );
               })}
             </div>

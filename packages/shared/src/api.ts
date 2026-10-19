@@ -20,6 +20,15 @@ import type {
   Unidad,
   UsuarioSesion,
   Venta,
+  Liquidacion,
+  LiquidacionRenglon,
+  LiquidacionConcepto,
+  AjusteProductor,
+  ComisionTipo,
+  TipoConceptoLiquidacion,
+  TipoAjusteProductor,
+  CategoriaAjusteProductor,
+  TipoProveedor,
 } from './entidades';
 
 // ── Autenticación y dispositivo ──────────────────────────────────────────────
@@ -117,6 +126,10 @@ export interface CambiosPull {
   compras: Compra[];
   movimientosInventario: MovimientoInventario[];
   movimientosDinero: MovimientoDinero[];
+  liquidaciones: Liquidacion[];
+  liquidacionRenglones: LiquidacionRenglon[];
+  liquidacionConceptos: LiquidacionConcepto[];
+  ajustesProductor: AjusteProductor[];
 }
 
 const lista = z.array(z.record(z.string(), z.unknown())).default([]);
@@ -139,6 +152,10 @@ export const esquemaRespuestaPull = z.object({
     compras: lista,
     movimientosInventario: lista,
     movimientosDinero: lista,
+    liquidaciones: lista,
+    liquidacionRenglones: lista,
+    liquidacionConceptos: lista,
+    ajustesProductor: lista,
   }),
 });
 export interface RespuestaPull {
@@ -252,3 +269,149 @@ export interface SolicitudAjuste {
   motivo: string;
   cargaId?: string | null;
 }
+
+export interface SolicitudLiquidacion {
+  proveedorId: string;
+  periodoDesde?: string | null;
+  periodoHasta?: string | null;
+  renglones: Array<{
+    ventaId: string;
+    linea: number;
+    cargaId?: string | null;
+    importe: string;
+    unidades: string;
+  }>;
+  comisionTipo: ComisionTipo;
+  comisionValor: string;
+  comisionCalculada: string;
+  comisionFinal: string;
+  comisionNota?: string | null;
+  descuentos: Array<{
+    tipo: TipoConceptoLiquidacion;
+    concepto: string;
+    monto: string;
+  }>;
+}
+
+export interface SolicitudAjusteProductor {
+  proveedorId: string;
+  tipo: TipoAjusteProductor;
+  categoria: CategoriaAjusteProductor;
+  concepto: string;
+  monto: string;
+  ventaId?: string | null;
+}
+
+export interface ItemEstadoCuenta {
+  id: string;
+  tipo: 'corte' | 'pago' | 'anticipo' | 'ajuste';
+  fecha: string;
+  folio?: number;
+  concepto: string;
+  cargo?: string;
+  abono?: string;
+  saldoCorrido: string;
+  estadoCorte?: 'pendiente' | 'parcial' | 'pagado';
+  neto?: string;
+  totalVendido?: string;
+  comisionFinal?: string;
+  referenciaId?: string;
+}
+
+export interface EstadoCuentaProductor {
+  proveedorId: string;
+  proveedorNombre: string;
+  tipoProveedor: TipoProveedor;
+  saldo: string;
+  items: ItemEstadoCuenta[];
+}
+
+export interface RenglonPendienteLiquidacion {
+  ventaId: string;
+  folio: number;
+  fecha: string;
+  linea: number;
+  clasificacionId: string;
+  clasificacionNombre: string;
+  cantidad: string;
+  precio: string;
+  importe: string;
+  cargaId: string;
+  cargaFecha: string;
+  comisionTipoCarga?: ComisionTipo | null;
+  comisionValorCarga?: string | null;
+}
+
+export interface MermaPendienteLiquidacion {
+  id: string;
+  fecha: string;
+  cargaId: string;
+  clasificacionNombre: string;
+  cantidad: string;
+  costoReferencia: string;
+  montoEstimado: string;
+}
+
+export interface SaldoProveedor {
+  proveedorId: string;
+  nombre: string;
+  tipo: TipoProveedor;
+  saldo: string;
+  porPagar: string;
+  saldoAFavorComerciante: string;
+}
+
+export interface ReporteProductores {
+  desde: string;
+  hasta: string;
+  porPagarTotal: string;
+  productores: Array<{
+    proveedorId: string;
+    nombre: string;
+    totalVendido: string;
+    unidadesVendidas: string;
+    comisionGanada: string;
+    netoLiquidado: string;
+    cortes: number;
+    saldoActual: string;
+  }>;
+  periodos: Array<{
+    periodo: string;
+    totalVendido: string;
+    comisionGanada: string;
+    netoLiquidado: string;
+    cortes: number;
+  }>;
+}
+
+export interface DatosCrearLiquidacion {
+  proveedorId: string;
+  periodoDesde?: string | null;
+  periodoHasta?: string | null;
+  comisionTipo: ComisionTipo;
+  comisionValor?: string | null;
+  comisionFinal: string;
+  comisionNota?: string | null;
+  renglones: Array<{
+    ventaId: string;
+    linea: number;
+    cargaId?: string | null;
+    importe: string;
+  }>;
+  conceptos?: Array<{
+    tipo: 'flete' | 'tara' | 'merma' | 'otro';
+    concepto: string;
+    monto: string;
+  }>;
+}
+
+export interface DatosCrearAjusteProductor {
+  proveedorId: string;
+  tipo: 'cargo' | 'abono';
+  categoria: 'cancelacion' | 'incobrable' | 'otro';
+  concepto: string;
+  monto: string;
+  ventaId?: string | null;
+}
+
+
