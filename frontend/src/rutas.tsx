@@ -37,6 +37,10 @@ import Usuarios from './pantallas/usuarios/Usuarios';
 import Historial from './pantallas/historial/Historial';
 import Configuracion from './pantallas/configuracion/Configuracion';
 import Revisiones from './pantallas/revisiones/Revisiones';
+import CargaDelDia from './pantallas/carga/Carga';
+import NuevaCarga from './pantallas/carga/NuevaCarga';
+import DetalleCarga from './pantallas/carga/DetalleCarga';
+import PreciosHoy from './pantallas/inventario/PreciosHoy';
 
 /** Rutas con sesión: arranca el motor de sincronización mientras haya sesión. */
 function Protegida() {
@@ -91,7 +95,11 @@ export const router = createBrowserRouter([
           { path: 'deudas/:id', element: <DetalleDeuda /> },
           { path: 'deudas/:id/historial', element: <HistorialDeuda /> },
           { path: 'cobrar', element: con('pagos.registrar', <Cobrar />) },
+          { path: 'carga', element: <CargaDelDia /> },
+          { path: 'carga/nueva', element: con('cargas.registrar', <NuevaCarga />) },
+          { path: 'carga/:id', element: <DetalleCarga /> },
           { path: 'inventario', element: con('inventario.ver', <Inventario />) },
+          { path: 'inventario/precios', element: con('catalogo.editar_precios', <PreciosHoy />) },
           { path: 'inventario/nuevo', element: con('catalogo.editar', <FormProducto />) },
           { path: 'inventario/mermas', element: <MermasAjustes /> },
           { path: 'inventario/:id', element: con('inventario.ver', <DetalleProducto />) },

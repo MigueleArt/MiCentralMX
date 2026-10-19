@@ -30,7 +30,8 @@ rutasAlertas.get(
         id: a.id,
         clasificacionId: a.clasificacionId,
         productoId,
-        descripcion: `${p} · ${c}`,
+        cargaId: a.cargaId ?? null,
+        descripcion: a.cargaId ? `${p} · ${c} (Carga)` : `${p} · ${c}`,
         unidadPlural: u,
         existencia: a.existencia,
         sumaMovimientos: a.sumaMovimientos,
@@ -56,6 +57,24 @@ rutasAlertas.post(
     const [a] = await tx.select().from(alertasInventario).where(eq(alertasInventario.id, id)).for('update');
     if (!a) throw noEncontrado('La alerta no existe.');
     if (a.resueltaEn) throw conflicto('La alerta ya se resolvió.');
+
+    if (a.cargaId) {
+      const { rows: rCarga } = await tx.execute<{ suma: string }>(
+        sql`select coalesce(sum(delta), 0)::text as suma from movimientos_inventario where carga_id = ${a.cargaId} and clasificacion_id = ${a.clasificacionId}`,
+      );
+      const suma = rCarga[0].suma;
+      await tx.execute(sql`
+        insert into existencias_carga (carga_id, clasificacion_id, negocio_id, cantidad)
+        values (${a.cargaId}, ${a.clasificacionId}, ${usuario.negocioId}, ${suma})
+        on conflict (carga_id, clasificacion_id) do update set cantidad = excluded.cantidad
+      `);
+      await tx
+        .update(alertasInventario)
+        .set({ resolucion: 'corregida', resueltaPor: usuario.id, resueltaEn: new Date() })
+        .where(and(eq(alertasInventario.id, id), isNull(alertasInventario.resueltaEn)));
+      return { existencia: suma };
+    }
+
     // Bloquea la existencia y recalcula la suma en ese momento (puede haber cambiado desde la noche).
     await tx.select().from(existencias).where(eq(existencias.clasificacionId, a.clasificacionId)).for('update');
     const { rows } = await tx.execute<{ suma: string }>(

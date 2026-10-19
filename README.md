@@ -153,6 +153,15 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 
 **Revisiones.** Las operaciones que llegan con observaciones aparecen en Más → Revisiones para Dueño y Administrador. Ejemplos: existencia negativa, pago de más, reloj desfasado, cliente duplicado o un registro que todavía no existe. Desde ahí se **aprueban**, se **reaplican** o se **descartan**, con nota opcional.
 
+**Carga del día y asignación**
+- Los orígenes se modelan en `proveedores` mediante el campo `tipo` (`'tercero'` o `'rancho_propio'`).
+- Cada carga abierta registra la fruta que llega por clasificación y origen. Las ventas descuentan tanto de la carga asignada (`existencias_carga`) como del inventario general (`existencias`). Invariante: `existencias.cantidad = suma(existencias_carga) + existencia sin carga`.
+- Asignación automática: la venta descuenta de la carga abierta más antigua con existencia disponible; si la cantidad excede la existencia de la carga seleccionada, el renglón se divide automáticamente entre varias cargas. El vendedor puede cambiar el origen asignado.
+- Operación offline: registrar carga funciona sin conexión con idempotencia mediante la operación `'carga'`.
+- Cierre de carga: requiere conexión y permiso `cargas.cerrar`; exige que todo sobrante se resuelva como merma, devolución al productor o se mantenga la carga abierta.
+- Permisos: `cargas.registrar` y `cargas.cerrar` (el Trabajador no los tiene por omisión).
+- Decimales en unidades: unidades como 'tara' permiten decimales (`permite_decimales = true`), configurables en línea.
+
 **Seguridad**
 - PostgreSQL aplica Row Level Security: aunque la API tuviera un error, un negocio no puede leer ni escribir datos de otro (está probado).
 - La API se conecta con un rol sin privilegios para saltarse esa protección.
@@ -173,7 +182,7 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 | `backend/.env`, `backend/.env.test`, `.env` | Contraseñas y secretos. Se versionan solo los `.example`. |
 | `node_modules/`, `dist/`, `frontend/dist-demo/` | Se generan con `npm install` y `npm run build`. |
 
-Si se cambia el esquema de la base: **nueva migración** en `database/migraciones/` con el siguiente número (hoy van de `0001` a `0005`, la próxima es `0006_…sql`); nunca se edita una ya aplicada. Se aplica con `npm run db:migrar` en `backend/`. Si la tabla nueva es de un negocio, lleva `negocio_id`, RLS forzado con la política `aislamiento_negocio` y sus permisos para `mc_app`.
+Si se cambia el esquema de la base: **nueva migración** en `database/migraciones/` con el siguiente número (hoy van de `0001` a `0007`, la próxima es `0008_…sql`); nunca se edita una ya aplicada. Se aplica con `npm run db:migrar` en `backend/`. Si la tabla nueva es de un negocio, lleva `negocio_id`, RLS forzado con la política `aislamiento_negocio` y sus permisos para `mc_app`.
 
 ---
 

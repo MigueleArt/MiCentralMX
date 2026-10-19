@@ -3,6 +3,7 @@
  * (frontend/src/demo/semilla.ts). Usuarios: rodolfo (Dueño), ana (Administrador),
  * carlos y luis (Trabajador); contraseña demo1234. No usar en producción.
  */
+import { randomUUID } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { eq } from 'drizzle-orm';
 import pg from 'pg';
@@ -86,6 +87,42 @@ export async function sembrar(url: string) {
       for (const c of s.compras) {
         await tx.insert(t.compras).values({ ...c, folio: c.folio!, negocioId, usuarioId: uid(c.usuarioId), creadoEnDispositivo: new Date(c.creadoEnDispositivo) });
         await tx.insert(t.compraRenglones).values(c.renglones.map((x, linea) => ({ ...x, compraId: c.id, linea, negocioId })));
+      }
+      if (s.cargas?.length) {
+        for (const cg of s.cargas) {
+          await tx.insert(t.cargas).values({
+            id: cg.id,
+            negocioId,
+            fecha: cg.fecha,
+            proveedorId: cg.proveedorId,
+            estado: cg.estado,
+            usuarioId: uid(cg.usuarioId),
+            usuarioNombre: cg.usuarioNombre,
+            dispositivoId: null,
+            creadoEnDispositivo: new Date(cg.creadoEnDispositivo),
+            cerradaEn: cg.cerradaEn ? new Date(cg.cerradaEn) : null,
+          });
+          await tx.insert(t.cargaRenglones).values(
+            cg.renglones.map((x) => ({
+              cargaId: cg.id,
+              linea: x.linea,
+              negocioId,
+              clasificacionId: x.clasificacionId,
+              cantidad: x.cantidad,
+            })),
+          );
+        }
+      }
+      if (s.existenciasCarga?.length) {
+        for (const ec of s.existenciasCarga) {
+          await tx.insert(t.existenciasCarga).values({
+            id: ec.id ?? randomUUID(),
+            cargaId: ec.cargaId,
+            clasificacionId: ec.clasificacionId,
+            cantidad: ec.cantidad,
+            negocioId,
+          });
+        }
       }
       await tx.insert(t.movimientosInventario).values(s.movimientosInventario.map((m) => ({ ...m, negocioId, usuarioId: null, creadoEn: new Date(m.creadoEn) })));
       await tx.insert(t.movimientosDinero).values(s.movimientosDinero.map((m) => ({ ...m, negocioId, usuarioId: null, creadoEn: new Date(m.creadoEn) })));

@@ -1,10 +1,12 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type {
+  Carga,
   Cliente,
   Clasificacion,
   Compra,
   ConfiguracionNegocio,
   Existencia,
+  ExistenciaCarga,
   MovimientoDinero,
   MovimientoInventario,
   Negocio,
@@ -21,6 +23,7 @@ import type { DatosOperacion, TipoFolio, TipoOperacion } from '@micentralmx/shar
 type Local<T> = T & { operacionId?: string | null };
 
 export type VentaLocal = Local<Venta>;
+export type CargaLocal = Local<Carga>;
 export type PagoLocal = Local<Pago>;
 export type CompraLocal = Local<Compra>;
 export type MovimientoInventarioLocal = Local<MovimientoInventario>;
@@ -98,6 +101,8 @@ export class BaseLocal extends Dexie {
   existencias!: EntityTable<Existencia, 'clasificacionId'>;
   clientes!: EntityTable<ClienteLocal, 'id'>;
   proveedores!: EntityTable<Proveedor, 'id'>;
+  cargas!: EntityTable<CargaLocal, 'id'>;
+  existenciasCarga!: EntityTable<ExistenciaCarga, any>;
   ventas!: EntityTable<VentaLocal, 'id'>;
   pagos!: EntityTable<PagoLocal, 'id'>;
   compras!: EntityTable<CompraLocal, 'id'>;
@@ -126,6 +131,28 @@ export class BaseLocal extends Dexie {
       operaciones: '&operacionId, estado, creadoEnDispositivo',
       bloquesFolio: '&id, tipo',
     });
+
+    this.version(2)
+      .stores({
+        cargas: '&id, fecha, proveedorId, estado, creadoEnDispositivo, operacionId',
+        existenciasCarga: '&[cargaId+clasificacionId], cargaId, clasificacionId',
+        movimientosInventario: '&id, clasificacionId, productoId, creadoEn, operacionId, cargaId',
+        proveedores: '&id, nombre, tipo',
+      })
+      .upgrade((tx) => {
+        // En unidades existentes 'tara' se habilita permiteDecimales = true
+        tx.table('unidades')
+          .toCollection()
+          .modify((u: Unidad) => {
+            if (u.nombre?.toLowerCase() === 'tara') u.permiteDecimales = true;
+          });
+        // Proveedores existentes ganan tipo 'tercero' por omisión
+        tx.table('proveedores')
+          .toCollection()
+          .modify((p: Proveedor) => {
+            if (!p.tipo) p.tipo = 'tercero';
+          });
+      });
   }
 
   async leerMeta<K extends ClaveMeta>(clave: K): Promise<Metadatos[K] | undefined> {
@@ -150,6 +177,8 @@ export class BaseLocal extends Dexie {
       this.existencias,
       this.clientes,
       this.proveedores,
+      this.cargas,
+      this.existenciasCarga,
       this.ventas,
       this.pagos,
       this.compras,

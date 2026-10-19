@@ -87,6 +87,11 @@ function rutaDe(op: OperacionLocal): string | null {
       return '/inventario/mermas';
     case 'movimiento_dinero.crear':
       return '/pagos';
+    case 'carga':
+    case 'carga.crear':
+      return `/carga/${op.entidadId}`;
+    default:
+      return null;
   }
 }
 

@@ -1,7 +1,7 @@
 /** Lecturas reactivas de Dexie (useLiveQuery) para las pantallas que funcionan sin conexión. */
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { catalogo, clientesVista, deudasVista, ventasVista, ventaVista } from '../dominio/consultas';
+import { catalogo, clientesVista, deudasVista, ventasVista, ventaVista, totalesCargaDelDia, detalleCargaVista, cargasAbiertas } from '../dominio/consultas';
 
 export const useCatalogo = (incluirArchivados = false) => useLiveQuery(() => catalogo(incluirArchivados), [incluirArchivados]);
 export const useVentas = () => useLiveQuery(ventasVista);
@@ -11,3 +11,6 @@ export const useClientes = () => useLiveQuery(clientesVista);
 export const useProveedores = () =>
   useLiveQuery(async () => (await db.proveedores.toArray()).filter((p) => !p.archivadoEn).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
 export const useUnidades = () => useLiveQuery(() => db.unidades.toArray());
+export const useTotalesCargaDelDia = (fecha?: string) => useLiveQuery(() => totalesCargaDelDia(fecha), [fecha]);
+export const useDetalleCarga = (id: string | undefined) => useLiveQuery(() => (id ? detalleCargaVista(id) : null), [id]);
+export const useCargasAbiertas = () => useLiveQuery(cargasAbiertas);

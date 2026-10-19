@@ -1,14 +1,16 @@
-/** Filas de la base → entidades del contrato (camelCase, fechas ISO, sin negocio ni tx_id). */
 import type {
+  Carga,
   Cliente,
   Clasificacion,
   Compra,
   Existencia,
+  ExistenciaCarga,
   MovimientoDinero,
   MovimientoInventario,
   Pago,
   Producto,
   Proveedor,
+  RenglonCarga,
   RenglonCompra,
   RenglonVenta,
   Unidad,
@@ -64,7 +66,34 @@ export const proveedor = (r: Fila<typeof e.proveedores>): Proveedor => ({
   nombre: r.nombre,
   telefono: r.telefono,
   productos: r.productos,
+  tipo: r.tipo ?? 'tercero',
   archivadoEn: iso(r.archivadoEn),
+});
+
+export const renglonCarga = (r: Fila<typeof e.cargaRenglones>): RenglonCarga => ({
+  linea: r.linea,
+  clasificacionId: r.clasificacionId,
+  cantidad: r.cantidad,
+});
+
+export const carga = (r: Fila<typeof e.cargas>, renglones: RenglonCarga[]): Carga => ({
+  id: r.id,
+  fecha: r.fecha,
+  proveedorId: r.proveedorId,
+  estado: r.estado,
+  renglones,
+  usuarioId: r.usuarioId,
+  usuarioNombre: r.usuarioNombre,
+  dispositivoId: r.dispositivoId ?? 'servidor',
+  creadoEnDispositivo: r.creadoEnDispositivo.toISOString(),
+  cerradaEn: iso(r.cerradaEn),
+});
+
+export const existenciaCarga = (r: Fila<typeof e.existenciasCarga>): ExistenciaCarga => ({
+  id: r.id,
+  cargaId: r.cargaId,
+  clasificacionId: r.clasificacionId,
+  cantidad: r.cantidad,
 });
 
 export const renglonVenta = (r: Fila<typeof e.ventaRenglones>): RenglonVenta => ({
@@ -78,6 +107,8 @@ export const renglonVenta = (r: Fila<typeof e.ventaRenglones>): RenglonVenta => 
   precio: r.precio,
   precioReferencia: r.precioReferencia,
   importe: r.importe,
+  cargaId: r.cargaId ?? null,
+  origenNombre: r.origenNombre ?? null,
 });
 
 export const venta = (r: Fila<typeof e.ventas>, renglones: RenglonVenta[]): Venta => ({
@@ -151,6 +182,7 @@ export const movimientoInventario = (r: Fila<typeof e.movimientosInventario>): M
   tipo: r.tipo,
   referencia: r.referencia,
   motivo: r.motivo,
+  cargaId: r.cargaId ?? null,
   usuarioNombre: r.usuarioNombre,
   creadoEn: r.creadoEn.toISOString(),
 });

@@ -9,12 +9,17 @@ import { bajarPagina } from '../src/modulos/sync/bajada';
 import { ejecutarNocturnas, msHasta } from '../src/tareas/nocturnas';
 import { bajar, clasificacion, empujar, entrar, operacion, venta } from './ayuda';
 
-afterAll(() => cerrarPools());
+const omitir = process.env.TEST_DB_OMITIR === 'true';
+const suite = omitir ? describe.skip : describe;
+
+afterAll(() => {
+  if (!omitir) return cerrarPools();
+});
 beforeEach(async () => {
-  await reiniciarLimites();
+  if (!omitir) await reiniciarLimites();
 });
 
-describe('límite de intentos en la base', () => {
+suite('límite de intentos en la base', () => {
   it('se comparte entre instancias de la API', async () => {
     const a = crearApp();
     const b = crearApp();
@@ -33,7 +38,7 @@ describe('límite de intentos en la base', () => {
   });
 });
 
-describe('bajada paginada', () => {
+suite('bajada paginada', () => {
   it('las páginas pequeñas traen exactamente lo mismo que una sola página', async () => {
     const ana = await entrar('ana');
     const completa = await conNegocio(ana.negocioId, (tx) => bajarPagina(tx, '0', 100_000));
@@ -84,8 +89,20 @@ describe('bajada paginada', () => {
   });
 });
 
-describe('conciliación nocturna', () => {
+suite('conciliación nocturna', () => {
   const owner = () => new pg.Client({ connectionString: process.env.DATABASE_OWNER_URL });
+
+  beforeEach(async () => {
+    const db = owner();
+    await db.connect();
+    await db.query(`
+      update existencias e
+      set cantidad = coalesce((select sum(delta) from movimientos_inventario m where m.clasificacion_id = e.clasificacion_id), 0)
+    `);
+    await db.query('delete from existencias_carga');
+    await db.query('delete from alertas_inventario');
+    await db.end();
+  });
 
   it('detecta una existencia que no cuadra con su historial y la corrige', async () => {
     const ana = await entrar('ana');

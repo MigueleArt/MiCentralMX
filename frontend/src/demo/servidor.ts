@@ -25,10 +25,12 @@ import type {
   UsuarioNegocio,
 } from '@micentralmx/shared/api';
 import type {
+  Carga,
   Clasificacion,
   Cliente,
   Compra,
   ConfiguracionNegocio,
+  ExistenciaCarga,
   MovimientoDinero,
   MovimientoInventario,
   Negocio,
@@ -73,6 +75,8 @@ const TABLAS_PULL = [
   'productos',
   'clasificaciones',
   'existencias',
+  'existenciasCarga',
+  'cargas',
   'clientes',
   'proveedores',
   'ventas',
@@ -189,12 +193,23 @@ async function moverExistencia(
   usuarioNombre: string,
   creadoEn: string,
   id = nuevoId(),
+  cargaId: string | null = null,
 ): Promise<boolean> {
   const actual = (await obtener<{ cantidad: string }>('existencias', clasificacionId))?.cantidad ?? '0';
   const nueva = D(actual).plus(delta);
   await guardar('existencias', clasificacionId, { clasificacionId, cantidad: nueva.toString() });
+
+  if (cargaId) {
+    const existenciasCarga = await todos<ExistenciaCarga>('existenciasCarga');
+    const ec = existenciasCarga.find((x) => x.cargaId === cargaId && x.clasificacionId === clasificacionId);
+    const cantCargaActual = ec?.cantidad ?? '0';
+    const nuevaCantCarga = D(cantCargaActual).plus(delta).toString();
+    const ecId = ec?.id ?? nuevoId();
+    await guardar('existenciasCarga', ecId, { id: ecId, cargaId, clasificacionId, cantidad: nuevaCantCarga });
+  }
+
   await guardar('movimientosInventario', id, {
-    id, clasificacionId, productoId, delta, tipo, referencia, motivo, usuarioNombre, creadoEn,
+    id, clasificacionId, productoId, delta, tipo, referencia, motivo, usuarioNombre, creadoEn, cargaId,
   } satisfies MovimientoInventario);
   return nueva.gte(0);
 }
@@ -246,7 +261,7 @@ async function aplicarOperacion(op: OperacionPush, usuario: UsuarioServidor, rel
       const venta: Venta = { ...v, folio, folioProvisional: v.folioProvisional, pagado: '0.00' };
       let alcanza = true;
       for (const r of venta.renglones) {
-        const ok = await moverExistencia(r.clasificacionId, r.productoId, D(r.cantidad).neg().toString(), 'venta', `Venta ${folioVenta(venta)}`, null, venta.usuarioNombre, venta.creadoEnDispositivo);
+        const ok = await moverExistencia(r.clasificacionId, r.productoId, D(r.cantidad).neg().toString(), 'venta', `Venta ${folioVenta(venta)}`, null, venta.usuarioNombre, venta.creadoEnDispositivo, nuevoId(), r.cargaId ?? null);
         alcanza &&= ok;
       }
       if (!alcanza) revision.push('La existencia quedó negativa.');
@@ -308,7 +323,7 @@ async function aplicarOperacion(op: OperacionPush, usuario: UsuarioServidor, rel
     case 'merma.crear': {
       if (!puede('inventario.merma')) return { estado: 'rechazada', motivo: 'El usuario no tiene permiso para registrar mermas.' };
       const m = op.datos as DatosMerma;
-      const alcanza = await moverExistencia(m.clasificacionId, m.productoId, D(m.cantidad).neg().toString(), 'merma', null, m.motivo, autor.nombre, op.creado_en_dispositivo, m.id);
+      const alcanza = await moverExistencia(m.clasificacionId, m.productoId, D(m.cantidad).neg().toString(), 'merma', null, m.motivo, autor.nombre, op.creado_en_dispositivo, m.id, m.cargaId ?? null);
       if (!alcanza) revision.push('La existencia quedó negativa.');
       await auditar(autor.nombre, 'inventario', `${autor.nombre} registró una merma de ${m.cantidad} (${m.motivo})`, op.creado_en_dispositivo);
       return revision.length ? { estado: 'en_revision', motivo: revision.join(' ') } : { estado: 'aplicada' };
@@ -330,6 +345,29 @@ async function aplicarOperacion(op: OperacionPush, usuario: UsuarioServidor, rel
       await guardar('movimientosDinero', m.id, m);
       await auditar(autor.nombre, 'pagos', `${autor.nombre} registró ${m.concepto} por ${formatoMXN(m.monto)}`, m.creadoEn);
       return revision.length ? { estado: 'en_revision', motivo: revision.join(' ') } : { estado: 'aplicada' };
+    }
+    case 'carga':
+    case 'carga.crear': {
+      if (!puede('cargas.registrar')) return { estado: 'rechazada', motivo: 'El usuario no tiene permiso para registrar cargas.' };
+      const c = op.datos as Carga;
+      for (const r of c.renglones) {
+        const cl = await obtener<Clasificacion>('clasificaciones', r.clasificacionId);
+        await moverExistencia(
+          r.clasificacionId,
+          cl?.productoId ?? '',
+          r.cantidad,
+          'carga',
+          'Carga del día',
+          null,
+          c.usuarioNombre,
+          c.creadoEnDispositivo,
+          nuevoId(),
+          c.id,
+        );
+      }
+      await guardar('cargas', c.id, c);
+      await auditar(c.usuarioNombre, 'inventario', `${c.usuarioNombre} registró una carga de ${c.renglones.length} renglones`, c.creadoEnDispositivo);
+      return { estado: 'aplicada' };
     }
     default:
       void usuario;
@@ -519,10 +557,16 @@ ruta('POST', '/inventario/ajustes', async ({ cuerpo, usuario }) => {
   const c = await obtener<Clasificacion>('clasificaciones', d.clasificacionId);
   if (!c) return error(404, 'La clasificación no existe.');
   if (!(D(d.cantidadContada).gte(0))) return error(422, 'Escribe la cantidad contada.');
-  // El servidor calcula la diferencia contra la existencia vigente, no contra la del dispositivo.
-  const actual = D((await obtener<{ cantidad: string }>('existencias', c.id))?.cantidad ?? 0);
+  let actual = D(0);
+  if (d.cargaId) {
+    const existenciasCarga = await todos<ExistenciaCarga>('existenciasCarga');
+    const ec = existenciasCarga.find((x) => x.cargaId === d.cargaId && x.clasificacionId === c.id);
+    actual = D(ec?.cantidad ?? 0);
+  } else {
+    actual = D((await obtener<{ cantidad: string }>('existencias', c.id))?.cantidad ?? 0);
+  }
   const delta = D(d.cantidadContada).minus(actual);
-  if (!delta.isZero()) await moverExistencia(c.id, c.productoId, delta.toString(), 'ajuste', null, d.motivo || 'Conteo físico', usuario.nombre, new Date().toISOString());
+  if (!delta.isZero()) await moverExistencia(c.id, c.productoId, delta.toString(), 'ajuste', null, d.motivo || 'Conteo físico', usuario.nombre, new Date().toISOString(), nuevoId(), d.cargaId ?? null);
   await auditar(usuario.nombre, 'inventario', `${usuario.nombre} ajustó ${c.nombre}: ${actual} → ${d.cantidadContada}`);
   return ok({ delta: delta.toString() });
 });
@@ -534,7 +578,26 @@ ruta('POST', '/ventas/:id/cancelar', async ({ cuerpo, usuario, params }) => {
   if (v.estado === 'cancelada') return error(409, 'La venta ya está cancelada.');
   if (D(v.pagado).gt(0)) return error(409, 'La venta tiene pagos registrados; revisa los pagos antes de cancelar.');
   const ahora = new Date().toISOString();
-  for (const r of v.renglones) await moverExistencia(r.clasificacionId, r.productoId, r.cantidad, 'cancelacion', `Venta ${folioVenta(v)}`, cuerpo.motivo ?? null, usuario.nombre, ahora);
+  for (const r of v.renglones) {
+    let cargaIdDevolver = r.cargaId ?? null;
+    let motivoRenglon = cuerpo.motivo ?? null;
+    if (r.cargaId) {
+      const carga = await obtener<Carga>('cargas', r.cargaId);
+      if (carga) {
+        if (carga.estado === 'cerrada') {
+          const tieneLiquidadas = (carga as any).liquidada === true;
+          if (!tieneLiquidadas) {
+            await guardar('cargas', carga.id, { ...carga, estado: 'abierta', cerradaEn: null });
+            cargaIdDevolver = r.cargaId;
+          } else {
+            cargaIdDevolver = null;
+            motivoRenglon = (cuerpo.motivo ? cuerpo.motivo + ' - ' : '') + 'Carga liquidada: devuelto a existencia general';
+          }
+        }
+      }
+    }
+    await moverExistencia(r.clasificacionId, r.productoId, r.cantidad, 'cancelacion', `Venta ${folioVenta(v)}`, motivoRenglon, usuario.nombre, ahora, nuevoId(), cargaIdDevolver);
+  }
   await guardar('ventas', v.id, { ...v, estado: 'cancelada', canceladaEn: ahora });
   await auditar(usuario.nombre, 'ventas', `${usuario.nombre} canceló la venta ${folioVenta(v)}${cuerpo.motivo ? `: ${cuerpo.motivo}` : ''}`);
   return ok();
@@ -567,13 +630,85 @@ const guardarProveedor: Manejador = async ({ cuerpo, usuario, params }) => {
   if (e) return e;
   if (!String(cuerpo.nombre ?? '').trim()) return error(422, 'Escribe el nombre del proveedor.');
   const id = params[0] ?? nuevoId();
-  const p: Proveedor = { id, nombre: cuerpo.nombre.trim(), telefono: cuerpo.telefono || null, productos: cuerpo.productos ?? '', archivadoEn: null };
+  const p: Proveedor = { id, nombre: cuerpo.nombre.trim(), telefono: cuerpo.telefono || null, productos: cuerpo.productos ?? '', tipo: cuerpo.tipo ?? 'tercero', archivadoEn: null };
   await guardar('proveedores', id, p);
   await auditar(usuario.nombre, 'compras', `${usuario.nombre} ${params[0] ? 'editó' : 'agregó'} al proveedor ${p.nombre}`);
   return ok(p);
 };
 ruta('POST', '/proveedores', guardarProveedor);
 ruta('PATCH', '/proveedores/:id', guardarProveedor);
+
+ruta('PATCH', '/catalogo/precios', async ({ cuerpo, usuario }) => {
+  const e = exigir(usuario, await permisos(usuario), 'catalogo.editar_precios');
+  if (e) return e;
+  const lista = (cuerpo?.precios ?? []) as Array<{ clasificacionId: string; precio: string }>;
+  for (const item of lista) {
+    const cl = await obtener<Clasificacion>('clasificaciones', item.clasificacionId);
+    if (cl) {
+      await guardar('clasificaciones', cl.id, { ...cl, precio: aImporte(item.precio) });
+    }
+  }
+  await auditar(usuario.nombre, 'catalogo', `${usuario.nombre} actualizó los precios de ${lista.length} clasificaciones`);
+  return ok({ actualizados: lista.length });
+});
+
+ruta('PATCH', '/catalogo/unidades/:id', async ({ cuerpo, usuario, params }) => {
+  const e = exigir(usuario, await permisos(usuario), 'configuracion.editar');
+  if (e) return e;
+  const u = await obtener<{ id: string; nombre: string; plural: string; permiteDecimales: boolean; archivadoEn: string | null }>('unidades', params[0]);
+  if (!u) return error(404, 'La unidad no existe.');
+  const permiteDecimales = Boolean(cuerpo.permiteDecimales);
+  await guardar('unidades', u.id, { ...u, permiteDecimales });
+  await auditar(usuario.nombre, 'configuracion', `${usuario.nombre} ${permiteDecimales ? 'activó' : 'desactivó'} decimales para la unidad ${u.nombre}`);
+  return ok({ ...u, permiteDecimales });
+});
+
+ruta('POST', '/cargas/:id/cerrar', async ({ cuerpo, usuario, params }) => {
+  const e = exigir(usuario, await permisos(usuario), 'cargas.cerrar');
+  if (e) return e;
+  const id = params[0];
+  const carga = await obtener<Carga>('cargas', id);
+  if (!carga) return error(404, 'La carga no existe.');
+  if (carga.estado === 'cerrada') return error(409, 'La carga ya está cerrada.');
+
+  const todasEc = await todos<ExistenciaCarga>('existenciasCarga');
+  const existencias = todasEc.filter((x) => x.cargaId === id);
+  const sobrantes = existencias.filter((x) => D(x.cantidad).gt(0));
+
+  const resoluciones = (cuerpo?.resoluciones ?? []) as Array<{ clasificacionId: string; accion: 'merma' | 'devolucion'; motivo?: string }>;
+  for (const sob of sobrantes) {
+    const res = resoluciones.find((r) => r.clasificacionId === sob.clasificacionId);
+    if (!res) {
+      return error(422, 'Cada sobrante debe resolverse como merma o devolución para poder cerrar la carga.');
+    }
+  }
+
+  const ahora = new Date().toISOString();
+  for (const res of resoluciones) {
+    const sob = existencias.find((x) => x.clasificacionId === res.clasificacionId);
+    if (sob && D(sob.cantidad).gt(0)) {
+      const cl = await obtener<Clasificacion>('clasificaciones', sob.clasificacionId);
+      if (cl) {
+        await moverExistencia(
+          sob.clasificacionId,
+          cl.productoId,
+          D(sob.cantidad).neg().toString(),
+          res.accion,
+          `Cierre de carga ${carga.fecha}`,
+          res.motivo || (res.accion === 'merma' ? 'Merma al cierre de carga' : 'Devolución al productor al cierre de carga'),
+          usuario.nombre,
+          ahora,
+          nuevoId(),
+          carga.id,
+        );
+      }
+    }
+  }
+
+  await guardar('cargas', id, { ...carga, estado: 'cerrada', cerradaEn: ahora });
+  await auditar(usuario.nombre, 'inventario', `${usuario.nombre} cerró la carga del ${carga.fecha}`);
+  return ok({ ok: true, cerradaEn: ahora });
+});
 
 ruta('GET', '/usuarios', async ({ usuario }) => {
   const e = exigir(usuario, await permisos(usuario), 'usuarios.gestionar');
@@ -671,6 +806,8 @@ const ETIQUETA_OP: Record<string, string> = {
   'merma.crear': 'Merma',
   'cliente.crear': 'Cliente nuevo',
   'movimiento_dinero.crear': 'Movimiento de dinero',
+  'carga': 'Carga del día',
+  'carga.crear': 'Carga del día',
 };
 
 function resumenDemo(op: OperacionPush): string {

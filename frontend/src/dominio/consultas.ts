@@ -11,7 +11,7 @@ import type {
   Producto,
   Unidad,
 } from '@micentralmx/shared/entidades';
-import { db, type EstadoSync, type OperacionLocal, type PagoLocal, type VentaLocal } from '../db/db';
+import { db, type CargaLocal, type EstadoSync, type OperacionLocal, type PagoLocal, type VentaLocal } from '../db/db';
 import { D, sumar } from '../lib/dinero';
 import { diaLocal, diferenciaDias } from '../lib/fechas';
 import { folioVenta } from './formato';
@@ -30,7 +30,7 @@ export async function cargarOperaciones() {
   return { porId, vigentes };
 }
 
-// ── Inventario ──────────────────────────────────────────────────────────────
+// ── Inventario y Cargas ────────────────────────────────────────────────────
 
 export async function existenciasEfectivas(): Promise<Map<string, Decimal>> {
   const [{ vigentes }, snapshot, locales] = await Promise.all([
@@ -45,6 +45,118 @@ export async function existenciasEfectivas(): Promise<Map<string, Decimal>> {
     mapa.set(m.clasificacionId, (mapa.get(m.clasificacionId) ?? D(0)).plus(m.delta));
   }
   return mapa;
+}
+
+export async function existenciasCargaEfectivas(): Promise<Map<string, Decimal>> {
+  const [{ vigentes }, snapshot, locales] = await Promise.all([
+    cargarOperaciones(),
+    db.existenciasCarga.toArray(),
+    db.movimientosInventario.orderBy('operacionId').toArray(),
+  ]);
+  const mapa = new Map<string, Decimal>();
+  for (const ec of snapshot) {
+    mapa.set(`${ec.cargaId}:${ec.clasificacionId}`, D(ec.cantidad));
+  }
+  for (const m of locales) {
+    if (!m.operacionId || !vigentes.has(m.operacionId) || !m.cargaId) continue;
+    const clave = `${m.cargaId}:${m.clasificacionId}`;
+    mapa.set(clave, (mapa.get(clave) ?? D(0)).plus(m.delta));
+  }
+  return mapa;
+}
+
+export interface CargaConDetalle {
+  carga: CargaLocal;
+  proveedorNombre: string;
+  proveedorTipo: 'tercero' | 'rancho_propio';
+  existencias: Map<string, Decimal>;
+}
+
+export async function cargasAbiertas(): Promise<CargaConDetalle[]> {
+  const [cargas, proveedores, existencias] = await Promise.all([
+    db.cargas.toArray(),
+    db.proveedores.toArray(),
+    existenciasCargaEfectivas(),
+  ]);
+  const provMap = new Map(proveedores.map((p) => [p.id, p]));
+  const abiertas = cargas.filter((c) => c.estado === 'abierta');
+  abiertas.sort((a, b) => {
+    const fComp = a.fecha.localeCompare(b.fecha);
+    if (fComp !== 0) return fComp;
+    return a.creadoEnDispositivo.localeCompare(b.creadoEnDispositivo);
+  });
+
+  return abiertas.map((c) => {
+    const p = provMap.get(c.proveedorId);
+    const exMap = new Map<string, Decimal>();
+    for (const r of c.renglones) {
+      const cant = existencias.get(`${c.id}:${r.clasificacionId}`) ?? D(0);
+      exMap.set(r.clasificacionId, cant);
+    }
+    return {
+      carga: c,
+      proveedorNombre: p?.nombre ?? 'Proveedor',
+      proveedorTipo: p?.tipo ?? 'tercero',
+      existencias: exMap,
+    };
+  });
+}
+
+export interface AsignacionRenglon {
+  cargaId: string | null;
+  origenNombre: string;
+  cantidad: string;
+}
+
+export async function asignarCargaRenglon(
+  clasificacionId: string,
+  cantidad: string,
+  cargaIdPreferencia?: string | null,
+): Promise<AsignacionRenglon[]> {
+  const pedida = D(cantidad);
+  if (pedida.lte(0)) return [];
+
+  const abiertas = await cargasAbiertas();
+  const conStock = abiertas.filter((c) => (c.existencias.get(clasificacionId) ?? D(0)).gt(0));
+
+  if (conStock.length === 0) {
+    return [{ cargaId: null, origenNombre: 'Inventario general', cantidad: pedida.toString() }];
+  }
+
+  if (cargaIdPreferencia) {
+    const idx = conStock.findIndex((c) => c.carga.id === cargaIdPreferencia);
+    if (idx > 0) {
+      const preferida = conStock.splice(idx, 1)[0];
+      conStock.unshift(preferida);
+    }
+  }
+
+  const resultado: AsignacionRenglon[] = [];
+  let restante = pedida;
+
+  for (const c of conStock) {
+    if (restante.lte(0)) break;
+    const disponible = c.existencias.get(clasificacionId) ?? D(0);
+    const tomar = Decimal.min(restante, disponible);
+    if (tomar.gt(0)) {
+      resultado.push({
+        cargaId: c.carga.id,
+        origenNombre: c.proveedorNombre,
+        cantidad: tomar.toString(),
+      });
+      restante = restante.minus(tomar);
+    }
+  }
+
+  if (restante.gt(0)) {
+    resultado.push({
+      cargaId: null,
+      origenNombre: 'Inventario general',
+      cantidad: restante.toString(),
+    });
+  }
+
+  return resultado;
 }
 
 export interface ClasificacionVista {
@@ -246,3 +358,291 @@ export function sincronizacionDe(ops: Map<string, OperacionLocal>, operacionId: 
 }
 
 export const descripcionFolio = (v: VentaLocal) => `Venta ${folioVenta(v)}`;
+
+// ── Vistas de Cargas del día ───────────────────────────────────────────────
+
+export interface RenglonCargaDetalle {
+  clasificacionId: string;
+  productoNombre: string;
+  clasificacionNombre: string;
+  unidadNombre: string;
+  unidadPlural: string;
+  cargado: Decimal;
+  vendido: Decimal;
+  merma: Decimal;
+  devolucion: Decimal;
+  queda: Decimal;
+}
+
+export interface VentaCargaResumen {
+  venta: VentaLocal;
+  clienteNombre: string;
+  total: Decimal;
+  cantidadTotalCarga: Decimal;
+  creadoEnDispositivo: string;
+}
+
+export interface CargaDetalleVista {
+  carga: CargaLocal;
+  proveedorNombre: string;
+  proveedorTipo: 'tercero' | 'rancho_propio';
+  renglones: RenglonCargaDetalle[];
+  totalCargado: Decimal;
+  totalVendido: Decimal;
+  totalMerma: Decimal;
+  totalDevolucion: Decimal;
+  totalQueda: Decimal;
+  ventas: VentaCargaResumen[];
+  sync: EstadoSync | null;
+}
+
+export interface CargaResumenVista {
+  carga: CargaLocal;
+  proveedorNombre: string;
+  proveedorTipo: 'tercero' | 'rancho_propio';
+  totalCargado: Decimal;
+  totalVendido: Decimal;
+  totalQueda: Decimal;
+  sync: EstadoSync | null;
+}
+
+export interface TotalesCargaDia {
+  cargado: Decimal;
+  vendido: Decimal;
+  queda: Decimal;
+  porClasificacion: Array<{
+    clasificacionId: string;
+    productoNombre: string;
+    clasificacionNombre: string;
+    unidadPlural: string;
+    cargado: Decimal;
+    vendido: Decimal;
+    queda: Decimal;
+  }>;
+  porOrigen: Array<{
+    proveedorId: string;
+    proveedorNombre: string;
+    proveedorTipo: 'tercero' | 'rancho_propio';
+    cargado: Decimal;
+    vendido: Decimal;
+    queda: Decimal;
+  }>;
+  cargas: CargaResumenVista[];
+}
+
+export async function detalleCargaVista(id: string): Promise<CargaDetalleVista | null> {
+  const [carga, proveedores, productos, clasificaciones, unidades, existenciasCarga, movimientos, ventas, { porId }] = await Promise.all([
+    db.cargas.get(id),
+    db.proveedores.toArray(),
+    db.productos.toArray(),
+    db.clasificaciones.toArray(),
+    db.unidades.toArray(),
+    existenciasCargaEfectivas(),
+    db.movimientosInventario.toArray(),
+    ventasVista(),
+    cargarOperaciones(),
+  ]);
+  if (!carga) return null;
+
+  const prov = proveedores.find((p) => p.id === carga.proveedorId);
+  const clasMap = new Map(clasificaciones.map((c) => [c.id, c]));
+  const prodMap = new Map(productos.map((p) => [p.id, p]));
+  const unitMap = new Map(unidades.map((u) => [u.id, u]));
+
+  // Movimientos de esta carga
+  const movsCarga = movimientos.filter((m) => m.cargaId === carga.id);
+
+  // Ventas asociadas a esta carga
+  const ventasCarga = ventas.filter((v) => v.venta.renglones.some((r) => r.cargaId === carga.id));
+
+  const renglones: RenglonCargaDetalle[] = carga.renglones.map((r) => {
+    const c = clasMap.get(r.clasificacionId);
+    const p = c ? prodMap.get(c.productoId) : undefined;
+    const u = p ? unitMap.get(p.unidadId) : undefined;
+
+    const cargado = D(r.cantidad);
+    const queda = existenciasCarga.get(`${carga.id}:${r.clasificacionId}`) ?? D(0);
+
+    let vendido = D(0);
+    for (const v of ventasCarga) {
+      for (const vr of v.venta.renglones) {
+        if (vr.cargaId === carga.id && vr.clasificacionId === r.clasificacionId) {
+          vendido = vendido.plus(vr.cantidad);
+        }
+      }
+    }
+
+    let merma = D(0);
+    let devolucion = D(0);
+    for (const m of movsCarga) {
+      if (m.clasificacionId === r.clasificacionId) {
+        if (m.tipo === 'merma') merma = merma.plus(D(m.delta).abs());
+        if (m.tipo === 'devolucion') devolucion = devolucion.plus(D(m.delta).abs());
+      }
+    }
+
+    return {
+      clasificacionId: r.clasificacionId,
+      productoNombre: p?.nombre ?? 'Producto',
+      clasificacionNombre: c?.nombre ?? 'Clasificación',
+      unidadNombre: u?.nombre ?? 'unidad',
+      unidadPlural: u?.plural ?? 'unidades',
+      cargado,
+      vendido,
+      merma,
+      devolucion,
+      queda,
+    };
+  });
+
+  const op = carga.operacionId ? porId.get(carga.operacionId) : undefined;
+  const sync = op && op.estado !== 'sincronizada' ? op.estado : null;
+
+  const ventasResumen: VentaCargaResumen[] = ventasCarga.map((v) => {
+    let cantCarga = D(0);
+    for (const vr of v.venta.renglones) {
+      if (vr.cargaId === carga.id) {
+        cantCarga = cantCarga.plus(vr.cantidad);
+      }
+    }
+    return {
+      venta: v.venta,
+      clienteNombre: v.venta.clienteNombre ?? 'Público general',
+      total: D(v.venta.total),
+      cantidadTotalCarga: cantCarga,
+      creadoEnDispositivo: v.venta.creadoEnDispositivo,
+    };
+  });
+
+  return {
+    carga,
+    proveedorNombre: prov?.nombre ?? 'Proveedor',
+    proveedorTipo: prov?.tipo ?? 'tercero',
+    renglones,
+    totalCargado: sumar(renglones.map((r) => r.cargado)),
+    totalVendido: sumar(renglones.map((r) => r.vendido)),
+    totalMerma: sumar(renglones.map((r) => r.merma)),
+    totalDevolucion: sumar(renglones.map((r) => r.devolucion)),
+    totalQueda: sumar(renglones.map((r) => r.queda)),
+    ventas: ventasResumen,
+    sync,
+  };
+}
+
+export async function totalesCargaDelDia(fecha = diaLocal()): Promise<TotalesCargaDia> {
+  const [cargas, proveedores, productos, clasificaciones, unidades, existenciasCarga, ventas, { porId }] = await Promise.all([
+    db.cargas.toArray(),
+    db.proveedores.toArray(),
+    db.productos.toArray(),
+    db.clasificaciones.toArray(),
+    db.unidades.toArray(),
+    existenciasCargaEfectivas(),
+    ventasVista(),
+    cargarOperaciones(),
+  ]);
+
+  const delDia = cargas.filter((c) => c.fecha === fecha);
+  const provMap = new Map(proveedores.map((p) => [p.id, p]));
+  const clasMap = new Map(clasificaciones.map((c) => [c.id, c]));
+  const prodMap = new Map(productos.map((p) => [p.id, p]));
+  const unitMap = new Map(unidades.map((u) => [u.id, u]));
+
+  const resumenCargas: CargaResumenVista[] = delDia.map((c) => {
+    const prov = provMap.get(c.proveedorId);
+    let cargado = D(0);
+    let queda = D(0);
+    for (const r of c.renglones) {
+      cargado = cargado.plus(r.cantidad);
+      queda = queda.plus(existenciasCarga.get(`${c.id}:${r.clasificacionId}`) ?? D(0));
+    }
+    let vendido = D(0);
+    for (const v of ventas) {
+      for (const vr of v.venta.renglones) {
+        if (vr.cargaId === c.id) vendido = vendido.plus(vr.cantidad);
+      }
+    }
+    const op = c.operacionId ? porId.get(c.operacionId) : undefined;
+    return {
+      carga: c,
+      proveedorNombre: prov?.nombre ?? 'Proveedor',
+      proveedorTipo: prov?.tipo ?? 'tercero',
+      totalCargado: cargado,
+      totalVendido: vendido,
+      totalQueda: queda,
+      sync: op && op.estado !== 'sincronizada' ? op.estado : null,
+    };
+  });
+
+  const porClasMap = new Map<string, { cargado: Decimal; vendido: Decimal; queda: Decimal }>();
+  for (const c of delDia) {
+    for (const r of c.renglones) {
+      const cur = porClasMap.get(r.clasificacionId) ?? { cargado: D(0), vendido: D(0), queda: D(0) };
+      cur.cargado = cur.cargado.plus(r.cantidad);
+      cur.queda = cur.queda.plus(existenciasCarga.get(`${c.id}:${r.clasificacionId}`) ?? D(0));
+      porClasMap.set(r.clasificacionId, cur);
+    }
+  }
+  for (const v of ventas) {
+    for (const vr of v.venta.renglones) {
+      if (vr.cargaId && delDia.some((c) => c.id === vr.cargaId)) {
+        const cur = porClasMap.get(vr.clasificacionId) ?? { cargado: D(0), vendido: D(0), queda: D(0) };
+        cur.vendido = cur.vendido.plus(vr.cantidad);
+        porClasMap.set(vr.clasificacionId, cur);
+      }
+    }
+  }
+
+  const porClasificacion = [...porClasMap.entries()].map(([clasId, totals]) => {
+    const c = clasMap.get(clasId);
+    const p = c ? prodMap.get(c.productoId) : undefined;
+    const u = p ? unitMap.get(p.unidadId) : undefined;
+    return {
+      clasificacionId: clasId,
+      productoNombre: p?.nombre ?? 'Producto',
+      clasificacionNombre: c?.nombre ?? 'Clasificación',
+      unidadPlural: u?.plural ?? 'unidades',
+      ...totals,
+    };
+  });
+
+  const porOrigenMap = new Map<string, { cargado: Decimal; vendido: Decimal; queda: Decimal }>();
+  for (const c of delDia) {
+    const cur = porOrigenMap.get(c.proveedorId) ?? { cargado: D(0), vendido: D(0), queda: D(0) };
+    for (const r of c.renglones) {
+      cur.cargado = cur.cargado.plus(r.cantidad);
+      cur.queda = cur.queda.plus(existenciasCarga.get(`${c.id}:${r.clasificacionId}`) ?? D(0));
+    }
+    porOrigenMap.set(c.proveedorId, cur);
+  }
+  for (const v of ventas) {
+    for (const vr of v.venta.renglones) {
+      if (vr.cargaId) {
+        const c = delDia.find((x) => x.id === vr.cargaId);
+        if (c) {
+          const cur = porOrigenMap.get(c.proveedorId) ?? { cargado: D(0), vendido: D(0), queda: D(0) };
+          cur.vendido = cur.vendido.plus(vr.cantidad);
+          porOrigenMap.set(c.proveedorId, cur);
+        }
+      }
+    }
+  }
+
+  const porOrigen = [...porOrigenMap.entries()].map(([provId, totals]) => {
+    const p = provMap.get(provId);
+    return {
+      proveedorId: provId,
+      proveedorNombre: p?.nombre ?? 'Proveedor',
+      proveedorTipo: p?.tipo ?? 'tercero',
+      ...totals,
+    };
+  });
+
+  return {
+    cargado: sumar(resumenCargas.map((c) => c.totalCargado)),
+    vendido: sumar(resumenCargas.map((c) => c.totalVendido)),
+    queda: sumar(resumenCargas.map((c) => c.totalQueda)),
+    porClasificacion,
+    porOrigen,
+    cargas: resumenCargas,
+  };
+}

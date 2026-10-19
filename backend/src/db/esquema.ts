@@ -136,7 +136,44 @@ export const proveedores = pgTable('proveedores', {
   nombre: text('nombre').notNull(),
   telefono: text('telefono'),
   productos: text('productos').notNull(),
+  tipo: text('tipo').$type<'tercero' | 'rancho_propio'>().notNull().default('tercero'),
   archivadoEn: ts('archivado_en'),
+  txId: xid8('tx_id'),
+});
+
+export const cargas = pgTable('cargas', {
+  id: uuid('id').primaryKey(),
+  negocioId: uuid('negocio_id').notNull(),
+  fecha: date('fecha', { mode: 'string' }).notNull(),
+  proveedorId: uuid('proveedor_id').notNull(),
+  estado: text('estado').$type<'abierta' | 'cerrada'>().notNull(),
+  usuarioId: uuid('usuario_id').notNull(),
+  usuarioNombre: text('usuario_nombre').notNull(),
+  dispositivoId: uuid('dispositivo_id'),
+  creadoEnDispositivo: ts('creado_en_dispositivo').notNull(),
+  cerradaEn: ts('cerrada_en'),
+  txId: xid8('tx_id'),
+});
+
+export const cargaRenglones = pgTable(
+  'carga_renglones',
+  {
+    cargaId: uuid('carga_id').notNull(),
+    linea: integer('linea').notNull(),
+    negocioId: uuid('negocio_id').notNull(),
+    clasificacionId: uuid('clasificacion_id').notNull(),
+    cantidad: cantidad('cantidad').notNull(),
+    txId: xid8('tx_id'),
+  },
+  (t) => [primaryKey({ columns: [t.cargaId, t.linea] })],
+);
+
+export const existenciasCarga = pgTable('existencias_carga', {
+  id: uuid('id').primaryKey(),
+  cargaId: uuid('carga_id').notNull(),
+  clasificacionId: uuid('clasificacion_id').notNull(),
+  negocioId: uuid('negocio_id').notNull(),
+  cantidad: cantidad('cantidad').notNull(),
   txId: xid8('tx_id'),
 });
 
@@ -179,6 +216,8 @@ export const ventaRenglones = pgTable(
     precio: importe('precio').notNull(),
     precioReferencia: importe('precio_referencia').notNull(),
     importe: importe('importe').notNull(),
+    cargaId: uuid('carga_id'),
+    origenNombre: text('origen_nombre'),
   },
   (t) => [primaryKey({ columns: [t.ventaId, t.linea] })],
 );
@@ -251,9 +290,10 @@ export const movimientosInventario = pgTable('movimientos_inventario', {
   clasificacionId: uuid('clasificacion_id').notNull(),
   productoId: uuid('producto_id').notNull(),
   delta: cantidad('delta').notNull(),
-  tipo: text('tipo').$type<'inicial' | 'compra' | 'venta' | 'merma' | 'ajuste' | 'cancelacion'>().notNull(),
+  tipo: text('tipo').$type<'inicial' | 'compra' | 'venta' | 'merma' | 'ajuste' | 'cancelacion' | 'carga' | 'devolucion'>().notNull(),
   referencia: text('referencia'),
   motivo: text('motivo'),
+  cargaId: uuid('carga_id'),
   usuarioId: uuid('usuario_id'),
   usuarioNombre: text('usuario_nombre').notNull(),
   creadoEn: ts('creado_en').notNull(),
@@ -318,6 +358,8 @@ export const alertasInventario = pgTable('alertas_inventario', {
   id: uuid('id').primaryKey(),
   negocioId: uuid('negocio_id').notNull(),
   clasificacionId: uuid('clasificacion_id').notNull(),
+  cargaId: uuid('carga_id'),
+  tipo: text('tipo').notNull().default('descuadre'),
   existencia: cantidad('existencia').notNull(),
   sumaMovimientos: cantidad('suma_movimientos').notNull(),
   detectadaEn: ts('detectada_en').notNull(),

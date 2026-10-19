@@ -30,12 +30,13 @@ export interface Destino {
 
 const D = {
   inicio: { ruta: '/', texto: 'Inicio', icono: House },
+  carga: { ruta: '/carga', texto: 'Carga del día', icono: Truck },
   inventario: { ruta: '/inventario', texto: 'Inventario', icono: Package, permiso: 'inventario.ver' },
   ventas: { ruta: '/ventas', texto: 'Ventas', icono: Receipt },
   deudas: { ruta: '/deudas', texto: 'Deudas', icono: HandCoins, vencidas: true },
   clientes: { ruta: '/clientes', texto: 'Clientes', icono: Users },
   compras: { ruta: '/compras', texto: 'Compras', icono: ShoppingCart, permiso: 'compras.crear' },
-  proveedores: { ruta: '/proveedores', texto: 'Proveedores', icono: Truck, permiso: 'compras.crear' },
+  proveedores: { ruta: '/proveedores', texto: 'Proveedores y ranchos', icono: Truck, permiso: 'compras.crear' },
   pagos: { ruta: '/pagos', texto: 'Pagos', icono: Wallet },
   mermas: { ruta: '/inventario/mermas', texto: 'Mermas', icono: PackageMinus, permiso: 'inventario.merma' },
   reportes: { ruta: '/reportes', texto: 'Reportes', icono: ChartColumn, permiso: 'reportes.ver' },
@@ -52,14 +53,14 @@ export const DESTINOS = D;
 export const NAV_TELEFONO: Destino[] = [D.inicio, D.ventas, D.deudas, D.inventario, D.mas];
 
 /** Rail de tablet, como en el prototipo. */
-export const NAV_TABLET: Destino[] = [D.inicio, D.inventario, D.ventas, D.clientes, D.deudas, D.compras, D.pagos, D.mas];
+export const NAV_TABLET: Destino[] = [D.inicio, D.carga, D.inventario, D.ventas, D.clientes, D.deudas, D.compras, D.pagos, D.mas];
 
 /** Barra lateral de PC, como en el prototipo. */
-export const NAV_PC_OPERACION: Destino[] = [D.inicio, D.inventario, D.ventas, D.compras, D.clientes, D.proveedores, D.pagos, D.deudas, D.mermas];
+export const NAV_PC_OPERACION: Destino[] = [D.inicio, D.carga, D.inventario, D.ventas, D.compras, D.clientes, D.proveedores, D.pagos, D.deudas, D.mermas];
 export const NAV_PC_ADMIN: Destino[] = [D.reportes, D.revisiones, D.usuarios, D.historial, D.configuracion];
 
 /** Pantalla "Más" del teléfono. */
-export const MAS_OPERACION: Destino[] = [D.clientes, D.compras, D.proveedores, D.pagos, { ...D.mermas, texto: 'Mermas / Ajustes' }];
+export const MAS_OPERACION: Destino[] = [D.carga, D.clientes, D.compras, D.proveedores, D.pagos, { ...D.mermas, texto: 'Mermas / Ajustes' }];
 export const MAS_ADMIN: Destino[] = [D.reportes, D.revisiones, { ...D.usuarios, texto: 'Usuarios' }, D.historial, D.configuracion];
 
 export const ICONO_LISTA = ClipboardList;

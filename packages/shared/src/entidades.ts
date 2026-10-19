@@ -51,12 +51,46 @@ export interface Cliente {
   requiereRevision: boolean;
 }
 
+export type TipoProveedor = 'tercero' | 'rancho_propio';
+
 export interface Proveedor {
   id: string;
   nombre: string;
   telefono: string | null;
   productos: string;
+  tipo: TipoProveedor;
   archivadoEn: string | null;
+}
+
+export type EstadoCarga = 'abierta' | 'cerrada';
+
+export interface RenglonCarga {
+  cargaId?: string;
+  linea: number;
+  clasificacionId: string;
+  cantidad: string;
+}
+
+export interface Carga {
+  id: string;
+  fecha: string;
+  proveedorId: string;
+  proveedorNombre?: string;
+  proveedorTipo?: TipoProveedor;
+  estado: EstadoCarga;
+  renglones: RenglonCarga[];
+  usuarioId: string;
+  usuarioNombre: string;
+  dispositivoId: string;
+  creadoEnDispositivo: string;
+  cerradaEn: string | null;
+}
+
+export interface ExistenciaCarga {
+  id?: string;
+  cargaId: string;
+  clasificacionId: string;
+  cantidad: string;
 }
 
 export type FormaPago = 'efectivo' | 'transferencia' | 'credito';
@@ -73,6 +107,8 @@ export interface RenglonVenta {
   precio: string;
   precioReferencia: string;
   importe: string;
+  cargaId?: string | null;
+  origenNombre?: string | null;
 }
 
 export interface Venta {
@@ -149,7 +185,7 @@ export interface Compra {
   creadoEnDispositivo: string;
 }
 
-export type TipoMovimientoInventario = 'inicial' | 'compra' | 'venta' | 'merma' | 'ajuste' | 'cancelacion';
+export type TipoMovimientoInventario = 'inicial' | 'compra' | 'venta' | 'merma' | 'ajuste' | 'cancelacion' | 'carga' | 'devolucion';
 
 export interface MovimientoInventario {
   id: string;
@@ -159,6 +195,7 @@ export interface MovimientoInventario {
   tipo: TipoMovimientoInventario;
   referencia: string | null;
   motivo: string | null;
+  cargaId?: string | null;
   usuarioNombre: string;
   creadoEn: string;
 }

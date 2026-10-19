@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronRight, CircleAlert, KeyRound, LogOut, RefreshCw, Smartphone, Store, UserCog } from 'lucide-react';
+import { ChevronRight, CircleAlert, KeyRound, Layers, LogOut, RefreshCw, Smartphone, Store, UserCog, WifiOff } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, mensajeError } from '../../api/cliente';
@@ -11,14 +11,16 @@ import { AvisoLinea } from '../../componentes/Estados';
 import { Campo, Entrada } from '../../componentes/Formulario';
 import { EstadoSync } from '../../componentes/Sincronizacion';
 import { HojaInferior } from '../../componentes/Superpuestos';
-import type { ConfiguracionNegocio, Negocio } from '@micentralmx/shared/entidades';
-import { cambiarContrasena, guardarConfiguracion } from '../../dominio/enLinea';
+import type { ConfiguracionNegocio, Negocio, Unidad } from '@micentralmx/shared/entidades';
+import { cambiarContrasena, cambiarPermiteDecimalesUnidad, guardarConfiguracion } from '../../dominio/enLinea';
 import { useFormato } from '../../hooks/useFormato';
 import { useResumenSync } from '../../hooks/useResumenSync';
+import { useUnidades } from '../../hooks/useDatosLocales';
 import { EncabezadoPagina, EncabezadoSecundario } from '../../layout/Encabezados';
 import { formatoRelativo } from '../../lib/fechas';
 import { iniciales } from '../../lib/ids';
 import { sincronizar, useEstadoMotor } from '../../sync/motor';
+import { useConectividad } from '../../sync/conectividad';
 
 function DatosNegocio({ alCerrar }: { alCerrar: () => void }) {
   const qc = useQueryClient();
@@ -100,6 +102,72 @@ function CambiarContrasena({ alCerrar }: { alCerrar: () => void }) {
   );
 }
 
+function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
+  const avisar = useAvisos();
+  const unidades = useUnidades();
+  const { enLinea } = useConectividad();
+  const [actualizando, setActualizando] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const cambiar = async (u: Unidad, permiteDecimales: boolean) => {
+    if (!enLinea) return;
+    setActualizando(u.id);
+    setError(null);
+    try {
+      await cambiarPermiteDecimalesUnidad(u.id, permiteDecimales);
+      avisar(`Unidad ${u.nombre} actualizada`);
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setActualizando(null);
+    }
+  };
+
+  return (
+    <HojaInferior titulo="Unidades de medida" alCerrar={alCerrar}>
+      <p className="t-aux" style={{ marginBottom: 12 }}>
+        Activa o desactiva si una unidad permite vender y registrar fracciones con decimales (solo en línea).
+      </p>
+      {!enLinea && (
+        <AvisoLinea tono="warn" icono={<WifiOff className="ic" />}>
+          Modificar unidades requiere conexión a internet.
+        </AvisoLinea>
+      )}
+      {error && <AvisoLinea tono="err">{error}</AvisoLinea>}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {(unidades ?? []).map((u) => (
+          <div
+            key={u.id}
+            style={{
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              borderBottom: '1px solid var(--borde-tenue)',
+            }}
+          >
+            <div>
+              <p style={{ fontWeight: 600, fontSize: 15, textTransform: 'capitalize' }}>{u.nombre}</p>
+              <p className="t-aux" style={{ fontSize: 12 }}>
+                {u.permiteDecimales ? 'Acepta fracciones y decimales' : 'Solo cantidades enteras'}
+              </p>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: enLinea ? 'pointer' : 'not-allowed' }}>
+              <input
+                type="checkbox"
+                checked={u.permiteDecimales}
+                disabled={!enLinea || actualizando === u.id}
+                onChange={(e) => void cambiar(u, e.target.checked)}
+              />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>Decimales</span>
+            </label>
+          </div>
+        ))}
+      </div>
+    </HojaInferior>
+  );
+}
+
 /** Pantalla 29 · Configuración: negocio, sincronización y cuenta. */
 export default function Configuracion() {
   const { sesion, dispositivo, puede } = useSesionActiva();
@@ -107,7 +175,7 @@ export default function Configuracion() {
   const navegar = useNavigate();
   const r = useResumenSync();
   const motor = useEstadoMotor();
-  const [hoja, setHoja] = useState<'negocio' | 'contrasena' | null>(null);
+  const [hoja, setHoja] = useState<'negocio' | 'contrasena' | 'unidades' | null>(null);
   const [errorSalida, setErrorSalida] = useState<string | null>(null);
 
   const salir = async () => {
@@ -145,6 +213,13 @@ export default function Configuracion() {
                     <p className="t-aux">{sesion.negocio.ubicacion}</p>
                   </div>
                 </div>
+              )}
+              {puede('configuracion.editar') && (
+                <button type="button" className="rowlink" onClick={() => setHoja('unidades')}>
+                  <span className="ib"><Layers className="ic" /></span>
+                  <p style={{ flex: 1, fontWeight: 600 }}>Unidades y decimales</p>
+                  <ChevronRight className="ic" />
+                </button>
               )}
               {puede('usuarios.gestionar') && (
                 <Link className="rowlink" to="/usuarios">
@@ -212,6 +287,7 @@ export default function Configuracion() {
       </main>
       {hoja === 'negocio' && <DatosNegocio alCerrar={() => setHoja(null)} />}
       {hoja === 'contrasena' && <CambiarContrasena alCerrar={() => setHoja(null)} />}
+      {hoja === 'unidades' && <UnidadesMedida alCerrar={() => setHoja(null)} />}
     </>
   );
 }

@@ -9,6 +9,7 @@ import Decimal from 'decimal.js';
 import { exigirOperable, tienePermiso } from '../auth/sesion';
 import type { DatosMerma, DatosOperacion, TipoOperacion } from '@micentralmx/shared/api';
 import type {
+  Carga,
   Cliente,
   Compra,
   FormaPago,
@@ -25,7 +26,7 @@ import { aCantidad, aImporte, D, formatoMXN, sumar } from '../lib/dinero';
 import { ahoraIso } from '../lib/fechas';
 import { hashOperacion, nuevoId } from '../lib/ids';
 import { avisarOperacionNueva } from '../sync/eventos';
-import { catalogo, clientesVista, ordenCobro, existenciasEfectivas } from './consultas';
+import { catalogo, clientesVista, ordenCobro, existenciasEfectivas, cargasAbiertas } from './consultas';
 import { conAlmacenamiento, ErrorValidacion } from './errores';
 import { cantidadConUnidad, CATEGORIAS_DINERO, folioCompra, folioVenta } from './formato';
 import { reservarFolio } from './folios';
@@ -70,6 +71,8 @@ export interface EntradaRenglon {
   clasificacionId: string;
   cantidad: string;
   precio: string;
+  cargaId?: string | null;
+  origenNombre?: string | null;
 }
 
 export interface EntradaVenta {
@@ -141,6 +144,8 @@ export async function registrarVenta(entrada: EntradaVenta): Promise<Venta> {
       precio: aImporte(precio),
       precioReferencia: aImporte(c.clasificacion.precio),
       importe: aImporte(precio.times(r.cantidad)),
+      cargaId: r.cargaId ?? null,
+      origenNombre: r.origenNombre ?? null,
     };
   });
 
@@ -190,7 +195,7 @@ export async function registrarVenta(entrada: EntradaVenta): Promise<Venta> {
       canceladaEn: null,
     };
     const op = await nuevaOperacion('venta.crear', venta, sesion, `Venta ${folioVenta(venta)} · ${formatoMXN(total)}`, venta.id);
-    await db.transaction('rw', db.ventas, db.movimientosInventario, db.operaciones, async () => {
+    await db.transaction('rw', db.ventas, db.movimientosInventario, db.existenciasCarga, db.operaciones, async () => {
       await db.ventas.add({ ...venta, operacionId: op.operacionId });
       await db.movimientosInventario.bulkAdd(
         renglones.map((r) => ({
@@ -201,6 +206,7 @@ export async function registrarVenta(entrada: EntradaVenta): Promise<Venta> {
           tipo: 'venta' as const,
           referencia: `Venta ${folioVenta(venta)}`,
           motivo: null,
+          cargaId: r.cargaId ?? null,
           usuarioNombre: sesion.usuario.nombre,
           creadoEn: venta.creadoEnDispositivo,
           operacionId: op.operacionId,
@@ -365,6 +371,17 @@ export async function registrarMerma(entrada: Omit<DatosMerma, 'id' | 'productoI
   validarCantidad(entrada.cantidad, p.unidad.permiteDecimales, 'cantidad');
   if (!entrada.motivo) throw new ErrorValidacion('Elige el motivo de la merma.', 'motivo');
 
+  let cargaId = entrada.cargaId;
+  if (cargaId === undefined) {
+    const abiertas = await cargasAbiertas();
+    const cargasConStock = abiertas.filter((ca) => (ca.existencias.get(c.clasificacion.id) ?? D(0)).gt(0));
+    if (cargasConStock.length > 0) {
+      cargaId = cargasConStock[0].carga.id;
+    } else {
+      cargaId = null;
+    }
+  }
+
   const merma: DatosMerma = {
     id: nuevoId(),
     clasificacionId: c.clasificacion.id,
@@ -372,6 +389,7 @@ export async function registrarMerma(entrada: Omit<DatosMerma, 'id' | 'productoI
     cantidad: aCantidad(entrada.cantidad),
     motivo: entrada.motivo,
     nota: entrada.nota?.trim() || null,
+    cargaId: cargaId ?? null,
   };
   return conAlmacenamiento(async () => {
     const op = await nuevaOperacion(
@@ -390,6 +408,7 @@ export async function registrarMerma(entrada: Omit<DatosMerma, 'id' | 'productoI
         tipo: 'merma',
         referencia: null,
         motivo: merma.motivo,
+        cargaId: merma.cargaId ?? null,
         usuarioNombre: sesion.usuario.nombre,
         creadoEn: op.creadoEnDispositivo,
         operacionId: op.operacionId,
@@ -497,4 +516,98 @@ export async function registrarMovimientoDinero(entrada: EntradaMovimientoDinero
     avisarOperacionNueva();
     return mov;
   });
+}
+
+// ── Carga del día ────────────────────────────────────────────────────────────
+
+export interface EntradaCarga {
+  fecha: string;
+  proveedorId: string;
+  renglones: Array<{ clasificacionId: string; cantidad: string }>;
+}
+
+export async function registrarCarga(entrada: EntradaCarga): Promise<Carga> {
+  const { sesion, dispositivo } = await exigirOperable();
+  exigirPermiso(sesion, 'cargas.registrar', 'registrar cargas del día');
+  if (entrada.renglones.length === 0) throw new ErrorValidacion('Agrega al menos una clasificación con cantidad.', 'renglones');
+  const prov = await db.proveedores.get(entrada.proveedorId);
+  if (!prov) throw new ErrorValidacion('Elige el proveedor o rancho de la carga.', 'proveedor');
+
+  const prods = await catalogo(true);
+  const clasMap = new Map<string, { p: (typeof prods)[0]; c: (typeof prods)[0]['clasificaciones'][0] }>();
+  for (const p of prods) {
+    for (const c of p.clasificaciones) {
+      clasMap.set(c.clasificacion.id, { p, c });
+    }
+  }
+
+  const renglonesValidados = entrada.renglones.map((r, i) => {
+    const item = clasMap.get(r.clasificacionId);
+    if (!item) throw new ErrorValidacion('Una de las clasificaciones no existe.', `renglon-${i}`);
+    validarCantidad(r.cantidad, item.p.unidad.permiteDecimales, `cantidad-${i}`);
+    return {
+      linea: i,
+      clasificacionId: r.clasificacionId,
+      cantidad: aCantidad(r.cantidad),
+      productoId: item.p.producto.id,
+      productoNombre: item.p.producto.nombre,
+      clasificacionNombre: item.c.clasificacion.nombre,
+    };
+  });
+
+  return conAlmacenamiento(async () => {
+    const cargaId = nuevoId();
+    const creadoEnDispositivo = ahoraIso();
+    const carga: Carga = {
+      id: cargaId,
+      fecha: entrada.fecha,
+      proveedorId: entrada.proveedorId,
+      proveedorNombre: prov.nombre,
+      proveedorTipo: prov.tipo,
+      estado: 'abierta',
+      renglones: renglonesValidados.map((r) => ({
+        linea: r.linea,
+        clasificacionId: r.clasificacionId,
+        cantidad: r.cantidad,
+      })),
+      usuarioId: sesion.usuario.id,
+      usuarioNombre: sesion.usuario.nombre,
+      dispositivoId: dispositivo.id,
+      creadoEnDispositivo,
+      cerradaEn: null,
+    };
+
+    const op = await nuevaOperacion('carga', carga, sesion, `Carga ${carga.fecha} · ${prov.nombre}`, carga.id);
+
+    await db.transaction('rw', db.cargas, db.movimientosInventario, db.operaciones, async () => {
+      await db.cargas.add({ ...carga, operacionId: op.operacionId });
+      await db.movimientosInventario.bulkAdd(
+        renglonesValidados.map((r) => ({
+          id: nuevoId(),
+          clasificacionId: r.clasificacionId,
+          productoId: r.productoId,
+          delta: r.cantidad,
+          tipo: 'carga' as const,
+          referencia: `Carga ${carga.fecha} · ${prov.nombre}`,
+          motivo: null,
+          cargaId: carga.id,
+          usuarioNombre: sesion.usuario.nombre,
+          creadoEn: creadoEnDispositivo,
+          operacionId: op.operacionId,
+        })),
+      );
+      await db.operaciones.add(op);
+    });
+
+    avisarOperacionNueva();
+    return carga;
+  });
+}
+
+export async function cerrarCarga(
+  cargaId: string,
+  resoluciones: Array<{ clasificacionId: string; accion: 'merma' | 'devolucion'; motivo?: string }>,
+) {
+  const { api } = await import('../api/cliente');
+  return api('POST', `/cargas/${cargaId}/cerrar`, { resoluciones });
 }

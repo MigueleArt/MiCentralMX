@@ -4,11 +4,13 @@
  */
 import { z } from 'zod';
 import type {
+  Carga,
   Cliente,
   Clasificacion,
   Compra,
   ConfiguracionNegocio,
   Existencia,
+  ExistenciaCarga,
   MovimientoDinero,
   MovimientoInventario,
   Negocio,
@@ -54,6 +56,7 @@ export interface DatosMerma {
   cantidad: string;
   motivo: string;
   nota: string | null;
+  cargaId?: string | null;
 }
 
 export interface DatosOperacion {
@@ -63,6 +66,8 @@ export interface DatosOperacion {
   'merma.crear': DatosMerma;
   'cliente.crear': Cliente;
   'movimiento_dinero.crear': MovimientoDinero;
+  carga: Carga;
+  'carga.crear': Carga;
 }
 export type TipoOperacion = keyof DatosOperacion;
 
@@ -105,6 +110,8 @@ export interface CambiosPull {
   existencias: Existencia[];
   clientes: Cliente[];
   proveedores: Proveedor[];
+  cargas: Carga[];
+  existenciasCarga: ExistenciaCarga[];
   ventas: Venta[];
   pagos: Pago[];
   compras: Compra[];
@@ -125,6 +132,8 @@ export const esquemaRespuestaPull = z.object({
     existencias: lista,
     clientes: lista,
     proveedores: lista,
+    cargas: lista,
+    existenciasCarga: lista,
     ventas: lista,
     pagos: lista,
     compras: lista,
@@ -211,11 +220,23 @@ export interface AlertaInventario {
   id: string;
   clasificacionId: string;
   productoId: string;
+  cargaId?: string | null;
+  tipo?: string;
   descripcion: string;
   unidadPlural: string;
   existencia: string;
   sumaMovimientos: string;
   detectadaEn: string;
+}
+
+export interface ResolucionSobranteCarga {
+  clasificacionId: string;
+  accion: 'merma' | 'devolucion';
+  motivo?: string;
+}
+
+export interface SolicitudCerrarCarga {
+  resoluciones: ResolucionSobranteCarga[];
 }
 
 export interface DatosProducto {
@@ -229,4 +250,5 @@ export interface SolicitudAjuste {
   clasificacionId: string;
   cantidadContada: string;
   motivo: string;
+  cargaId?: string | null;
 }

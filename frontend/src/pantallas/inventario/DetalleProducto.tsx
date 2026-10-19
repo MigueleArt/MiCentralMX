@@ -11,7 +11,16 @@ import { EncabezadoSecundario } from '../../layout/Encabezados';
 import { D, formatoMXN } from '../../lib/dinero';
 import { formatoRelativo } from '../../lib/fechas';
 
-const TIPO = { inicial: 'Existencia inicial', compra: 'Compra', venta: 'Venta', merma: 'Merma', ajuste: 'Ajuste', cancelacion: 'Cancelación' } as const;
+const TIPO: Record<string, string> = {
+  inicial: 'Existencia inicial',
+  compra: 'Compra',
+  venta: 'Venta',
+  merma: 'Merma',
+  ajuste: 'Ajuste',
+  cancelacion: 'Cancelación',
+  carga: 'Carga',
+  devolucion: 'Devolución',
+};
 
 /** Pantalla 16 · Detalle de producto. */
 export default function DetalleProducto() {
@@ -20,13 +29,42 @@ export default function DetalleProducto() {
   const datos = useLiveQuery(async () => {
     const p = (await catalogo(true)).find((x) => x.producto.id === id);
     if (!p) return null;
-    const [movs, { porId }] = await Promise.all([db.movimientosInventario.where('productoId').equals(id!).toArray(), cargarOperaciones()]);
+    const [movs, cargas, existenciasCarga, proveedores, { porId }] = await Promise.all([
+      db.movimientosInventario.where('productoId').equals(id!).toArray(),
+      db.cargas.toArray(),
+      db.existenciasCarga.toArray(),
+      db.proveedores.toArray(),
+      cargarOperaciones(),
+    ]);
     const visibles = movs
       .filter((m) => sincronizacionDe(porId, m.operacionId) !== 'rechazada')
       .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
       .slice(0, 12)
       .map((m) => ({ m, sync: sincronizacionDe(porId, m.operacionId) }));
-    return { p, movs: visibles };
+
+    const provMap = new Map(proveedores.map((pr) => [pr.id, pr]));
+    const cargaMap = new Map(cargas.map((ca) => [ca.id, ca]));
+
+    const desglosePorClasificacion = new Map<string, Array<{ cargaId: string; proveedorNombre: string; proveedorTipo: string; fecha: string; cantidad: string }>>();
+    for (const ec of existenciasCarga) {
+      if (D(ec.cantidad).gt(0)) {
+        const ca = cargaMap.get(ec.cargaId);
+        if (ca) {
+          const pr = provMap.get(ca.proveedorId);
+          const lista = desglosePorClasificacion.get(ec.clasificacionId) ?? [];
+          lista.push({
+            cargaId: ca.id,
+            proveedorNombre: pr?.nombre ?? 'Proveedor',
+            proveedorTipo: pr?.tipo ?? 'tercero',
+            fecha: ca.fecha,
+            cantidad: ec.cantidad,
+          });
+          desglosePorClasificacion.set(ec.clasificacionId, lista);
+        }
+      }
+    }
+
+    return { p, movs: visibles, desglosePorClasificacion };
   }, [id]);
 
   if (datos === undefined) {
@@ -47,7 +85,7 @@ export default function DetalleProducto() {
       </>
     );
   }
-  const { p, movs } = datos;
+  const { p, movs, desglosePorClasificacion } = datos;
   const clas = p.clasificaciones.filter((c) => !c.clasificacion.archivadoEn);
   return (
     <>
@@ -78,23 +116,45 @@ export default function DetalleProducto() {
             </div>
           </div>
           <section className="pila">
-            <h2 className="lbl">Clasificaciones</h2>
+            <h2 className="lbl">Clasificaciones y existencias por carga</h2>
             <div className="card" style={{ overflow: 'hidden' }}>
-              {clas.map((c) => (
-                <div key={c.clasificacion.id} className="rowlink" style={{ cursor: 'default' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontWeight: 600 }}>{c.clasificacion.nombre}</p>
-                    <p className="t-aux num" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      {cantidadConUnidad(c.existencia.toString(), p.unidad)}
-                      <InsigniaInventario bajo={c.bajo} sin={c.sinExistencia} />
-                    </p>
+              {clas.map((c) => {
+                const cargasDeClas = desglosePorClasificacion.get(c.clasificacion.id) ?? [];
+                return (
+                  <div key={c.clasificacion.id} style={{ borderBottom: '1px solid var(--borde-tenue)', padding: '12px 14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontWeight: 600 }}>{c.clasificacion.nombre}</p>
+                        <p className="t-aux num" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {cantidadConUnidad(c.existencia.toString(), p.unidad)}
+                          <InsigniaInventario bajo={c.bajo} sin={c.sinExistencia} />
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p className="num" style={{ fontWeight: 700 }}>{formatoMXN(c.clasificacion.precio)}</p>
+                        {c.clasificacion.ultimoCosto && <p className="t-aux num">Costo {formatoMXN(c.clasificacion.ultimoCosto)}</p>}
+                      </div>
+                    </div>
+                    {cargasDeClas.length > 0 && (
+                      <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--fondo-control)', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <p className="t-aux" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Desglose por carga:
+                        </p>
+                        {cargasDeClas.map((cg) => (
+                          <div key={cg.cargaId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <span style={{ color: 'var(--texto)' }}>
+                              {cg.proveedorNombre} ({cg.proveedorTipo === 'rancho_propio' ? 'Rancho' : 'Consigna'}) · {cg.fecha}
+                            </span>
+                            <span className="num" style={{ fontWeight: 600 }}>
+                              {cg.cantidad} {p.unidad.plural}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p className="num" style={{ fontWeight: 700 }}>{formatoMXN(c.clasificacion.precio)}</p>
-                    {c.clasificacion.ultimoCosto && <p className="t-aux num">Costo {formatoMXN(c.clasificacion.ultimoCosto)}</p>}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
           <section className="pila">

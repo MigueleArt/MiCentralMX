@@ -61,6 +61,26 @@ const FUENTES: Fuente[] = [
   fuente({ nombre: 'clientes', tabla: t.clientes, clave: t.clientes.id, tx: t.clientes.txId, mapear: async (_tx, f: (typeof t.clientes.$inferSelect)[]) => f.map(mapa.cliente) }),
   fuente({ nombre: 'proveedores', tabla: t.proveedores, clave: t.proveedores.id, tx: t.proveedores.txId, mapear: async (_tx, f: (typeof t.proveedores.$inferSelect)[]) => f.map(mapa.proveedor) }),
   fuente({
+    nombre: 'cargas',
+    tabla: t.cargas,
+    clave: t.cargas.id,
+    tx: t.cargas.txId,
+    inicial: (limite) => or(eq(t.cargas.estado, 'abierta'), gte(t.cargas.creadoEnDispositivo, limite)),
+    mapear: async (tx, f: (typeof t.cargas.$inferSelect)[]) => {
+      const r = f.length ? await tx.select().from(t.cargaRenglones).where(inArray(t.cargaRenglones.cargaId, f.map((c) => c.id))).orderBy(asc(t.cargaRenglones.linea)) : [];
+      return f.map((c) => mapa.carga(c, r.filter((x) => x.cargaId === c.id).map(mapa.renglonCarga)));
+    },
+  }),
+  fuente({
+    nombre: 'existenciasCarga',
+    tabla: t.existenciasCarga,
+    clave: t.existenciasCarga.id,
+    tx: t.existenciasCarga.txId,
+    inicial: (limite) =>
+      sql`exists (select 1 from cargas c where c.id = ${t.existenciasCarga.cargaId} and (c.estado = 'abierta' or c.creado_en_dispositivo >= ${limite}))`,
+    mapear: async (_tx, f: (typeof t.existenciasCarga.$inferSelect)[]) => f.map(mapa.existenciaCarga),
+  }),
+  fuente({
     nombre: 'ventas',
     tabla: t.ventas,
     clave: t.ventas.id,
@@ -119,6 +139,8 @@ const vacio = (): CambiosPull => ({
   existencias: [],
   clientes: [],
   proveedores: [],
+  cargas: [],
+  existenciasCarga: [],
   ventas: [],
   pagos: [],
   compras: [],

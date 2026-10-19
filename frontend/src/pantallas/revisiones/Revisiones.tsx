@@ -35,6 +35,11 @@ function rutaDe(r: OperacionEnRevision): string | null {
       return '/inventario/mermas';
     case 'movimiento_dinero.crear':
       return '/pagos';
+    case 'carga':
+    case 'carga.crear':
+      return r.entidadId ? `/carga/${r.entidadId}` : null;
+    default:
+      return null;
   }
 }
 

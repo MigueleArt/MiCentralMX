@@ -44,8 +44,10 @@ curl -X POST https://DOMINIO/api/plataforma/negocios -H "X-Plataforma-Token: $PL
 - Dos dispositivos vendiendo la misma mercancía, precio modificado por un Trabajador y reloj desfasado.
 - Bajada incremental por cursor y paginada: páginas de 7 filas traen exactamente lo mismo que una sola página, sin repetidos; un cambio a mitad de la paginación llega en la siguiente sincronización; cursores mal formados se rechazan.
 - Revisiones: dependencia faltante y reaplicación, excedente de pago y aprobación, permisos.
-- Conciliación: detecta una existencia alterada, la corrige, cierra sola la alerta si ya cuadra, solo una instancia corre a la vez y la hora de las 03:00 se calcula bien.
+- Conciliación: detecta una existencia alterada, la corrige, cierra sola la alerta si ya cuadra, solo una instancia corre a la vez y la hora de las 03:00 se calcula bien. Se extiende para conciliar existencias_carga contra movimientos por carga.
 - Cancelación con movimiento inverso, ajuste por conteo, alta y archivado de producto, usuario suspendido, reportes e historial.
+- Cargas del día y asignación: una venta descuenta de su carga y del total general; aislamiento RLS en `cargas`, `carga_renglones` y `existencias_carga`; reenvío idempotente de la operación `carga`; cierre de carga resolviendo sobrantes (merma / devolución); control de permisos (`cargas.registrar`, `cargas.cerrar`).
+- Catálogo y unidades: edición masiva de precios del día (`PATCH /catalogo/precios`) y activación de decimales por unidad (`PATCH /catalogo/unidades/:id`).
 
 ## Seguridad
 

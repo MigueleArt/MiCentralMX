@@ -15,7 +15,7 @@ import { ajustarInventario } from '../../dominio/enLinea';
 import { ErrorAlmacenamiento, ErrorValidacion } from '../../dominio/errores';
 import { cantidadConUnidad, MOTIVOS_MERMA } from '../../dominio/formato';
 import { registrarMerma } from '../../dominio/operaciones';
-import { useCatalogo } from '../../hooks/useDatosLocales';
+import { useCatalogo, useCargasAbiertas } from '../../hooks/useDatosLocales';
 import { EncabezadoSecundario } from '../../layout/Encabezados';
 import { D } from '../../lib/dinero';
 import { formatoRelativo } from '../../lib/fechas';
@@ -29,10 +29,12 @@ export default function MermasAjustes() {
   const { enLinea } = useConectividad();
   const avisar = useAvisos();
   const catalogo = useCatalogo();
+  const cargasAbiertas = useCargasAbiertas() ?? [];
   const [params] = useSearchParams();
   const [modo, setModo] = useState<Modo>(puede('inventario.merma') ? 'merma' : 'ajuste');
   const [productoId, setProductoId] = useState<string | null>(params.get('producto'));
   const [clasificacionId, setClasificacionId] = useState<string | null>(null);
+  const [cargaId, setCargaId] = useState<string | null | 'auto'>('auto');
   const [cantidad, setCantidad] = useState('1');
   const [motivo, setMotivo] = useState<string>(MOTIVOS_MERMA[0]);
   const [motivoAjuste, setMotivoAjuste] = useState('Conteo físico');
@@ -66,10 +68,16 @@ export default function MermasAjustes() {
 
   const p = catalogo.find((x) => x.producto.id === productoId);
   const c = p?.clasificaciones.find((x) => x.clasificacion.id === clasificacionId);
+  const cargasConStock = c ? cargasAbiertas.filter((ca) => (ca.existencias.get(c.clasificacion.id) ?? D(0)).gt(0)) : [];
+  const cargaIdSeleccionada = cargaId === 'auto' ? (cargasConStock.length > 0 ? cargasConStock[0].carga.id : null) : cargaId;
+  const cargaActiva = cargasConStock.find((ca) => ca.carga.id === cargaIdSeleccionada);
+  const stockCargaActiva = cargaActiva && c ? (cargaActiva.existencias.get(c.clasificacion.id) ?? D(0)) : null;
+
   const puedeAjustar = puede('inventario.ajustar');
   const ajusteNoDisponible = !puedeAjustar ? 'Tu rol no permite ajustar inventario.' : !enLinea ? 'Los ajustes necesitan conexión: el servidor compara contra la existencia vigente.' : null;
   const cant = D(cantidad || 0);
   const despues = c ? (modo === 'merma' ? c.existencia.minus(cant) : cant) : null;
+  const despuesCarga = stockCargaActiva ? (modo === 'merma' ? stockCargaActiva.minus(cant) : cant) : null;
 
   const registrar = async () => {
     setErrores({});
@@ -81,10 +89,10 @@ export default function MermasAjustes() {
     setGuardando(true);
     try {
       if (modo === 'merma') {
-        await registrarMerma({ clasificacionId: c.clasificacion.id, cantidad, motivo, nota: null });
+        await registrarMerma({ clasificacionId: c.clasificacion.id, cantidad, motivo, nota: null, cargaId: cargaIdSeleccionada });
         avisar(enLinea ? 'Merma registrada' : 'Merma guardada en este dispositivo');
       } else {
-        const r = await ajustarInventario({ clasificacionId: c.clasificacion.id, cantidadContada: cantidad, motivo: motivoAjuste });
+        const r = await ajustarInventario({ clasificacionId: c.clasificacion.id, cantidadContada: cantidad, motivo: motivoAjuste, cargaId: cargaIdSeleccionada ?? undefined });
         avisar(D(r.delta).isZero() ? 'La existencia ya coincidía' : `Ajuste guardado (${D(r.delta).isNegative() ? '' : '+'}${r.delta})`);
       }
       setCantidad(modo === 'merma' ? '1' : '');
@@ -152,7 +160,15 @@ export default function MermasAjustes() {
                     aria-pressed={x.clasificacion.id === clasificacionId}
                     onClick={() => {
                       setClasificacionId(x.clasificacion.id);
-                      if (modo === 'ajuste') setCantidad(x.existencia.toString());
+                      setCargaId('auto');
+                      if (modo === 'ajuste') {
+                        const cargasConStockX = cargasAbiertas.filter((ca) => (ca.existencias.get(x.clasificacion.id) ?? D(0)).gt(0));
+                        if (cargasConStockX.length > 0) {
+                          setCantidad(cargasConStockX[0].existencias.get(x.clasificacion.id)?.toString() ?? '0');
+                        } else {
+                          setCantidad(x.existencia.toString());
+                        }
+                      }
                     }}
                   >
                     {x.clasificacion.nombre}
@@ -160,6 +176,37 @@ export default function MermasAjustes() {
                 ))}
               </div>
             </fieldset>
+          )}
+
+          {p && c && cargasConStock.length > 0 && (
+            <Campo etiqueta="Carga de origen" id="mcarga">
+              <ElegirEnLista
+                id="mcarga"
+                titulo="Carga de origen"
+                marcador="Elegir carga de origen"
+                valor={cargaIdSeleccionada ?? 'general'}
+                opciones={[
+                  ...cargasConStock.map((ca) => ({
+                    valor: ca.carga.id,
+                    texto: ca.proveedorNombre,
+                    detalle: `${ca.existencias.get(c.clasificacion.id)?.toString()} disponibles`,
+                  })),
+                  { valor: 'general', texto: 'Inventario general / Sin carga' },
+                ]}
+                alElegir={(v) => {
+                  const idSel = v === 'general' ? null : v;
+                  setCargaId(idSel);
+                  if (modo === 'ajuste') {
+                    if (idSel) {
+                      const stockCarga = cargasConStock.find((x) => x.carga.id === idSel)?.existencias.get(c.clasificacion.id);
+                      setCantidad(stockCarga?.toString() ?? '0');
+                    } else {
+                      setCantidad(c.existencia.toString());
+                    }
+                  }
+                }}
+              />
+            </Campo>
           )}
 
           {p && (
@@ -183,13 +230,29 @@ export default function MermasAjustes() {
           )}
 
           {c && p && despues && (
-            <div className="card fila-entre" style={{ padding: '12px 14px', background: 'var(--fondo-tabla)' }}>
-              <span className="t-2">Existencia de {c.clasificacion.nombre}</span>
-              <span className="num fila" style={{ fontWeight: 700, gap: 6 }}>
-                {c.existencia.toString()}
-                <ArrowRight className="ic" style={{ width: 16, height: 16, color: 'var(--texto-2)' }} />
-                <span style={{ color: despues.isNegative() ? 'var(--error-texto)' : undefined }}>{cantidadConUnidad(despues.toString(), p.unidad)}</span>
-              </span>
+            <div className="card pila" style={{ padding: '12px 14px', background: 'var(--fondo-tabla)', gap: 8 }}>
+              {cargaActiva && stockCargaActiva && despuesCarga && (
+                <div className="fila-entre">
+                  <span className="t-2">En carga ({cargaActiva.proveedorNombre})</span>
+                  <span className="num fila" style={{ fontWeight: 700, gap: 6 }}>
+                    {stockCargaActiva.toString()}
+                    <ArrowRight className="ic" style={{ width: 16, height: 16, color: 'var(--texto-2)' }} />
+                    <span style={{ color: despuesCarga.isNegative() ? 'var(--error-texto)' : undefined }}>
+                      {cantidadConUnidad(despuesCarga.toString(), p.unidad)}
+                    </span>
+                  </span>
+                </div>
+              )}
+              <div className="fila-entre">
+                <span className="t-2">Existencia total de {c.clasificacion.nombre}</span>
+                <span className="num fila" style={{ fontWeight: 700, gap: 6 }}>
+                  {c.existencia.toString()}
+                  <ArrowRight className="ic" style={{ width: 16, height: 16, color: 'var(--texto-2)' }} />
+                  <span style={{ color: despues.isNegative() ? 'var(--error-texto)' : undefined }}>
+                    {cantidadConUnidad(despues.toString(), p.unidad)}
+                  </span>
+                </span>
+              </div>
             </div>
           )}
           {modo === 'ajuste' && <p className="hint">El servidor calcula la diferencia contra la existencia vigente al guardar.</p>}

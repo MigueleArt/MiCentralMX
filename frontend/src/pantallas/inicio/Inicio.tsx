@@ -11,6 +11,7 @@ import {
   Receipt,
   ShoppingCart,
   TriangleAlert,
+  Truck,
   UserPlus,
   Wallet,
   Package,
@@ -29,6 +30,7 @@ import type { Permiso } from '@micentralmx/shared/permisos';
 import { folioCompra, cantidadConUnidad } from '../../dominio/formato';
 import { resumenInicio } from '../../dominio/resumenes';
 import { useFormato } from '../../hooks/useFormato';
+import { useTotalesCargaDelDia } from '../../hooks/useDatosLocales';
 import { formatoMXN, formatoMXNSigno, D } from '../../lib/dinero';
 import { formatoDiaFecha, formatoDia, formatoHora } from '../../lib/fechas';
 import { EncabezadoPagina } from '../../layout/Encabezados';
@@ -90,6 +92,7 @@ export default function Inicio() {
   const nombre = sesion.usuario.nombre.split(' ')[0];
   const accesos = ACCESOS.filter((a) => puede(a.permiso));
   const ancho = formato !== 'telefono';
+  const cargaDelDia = useTotalesCargaDelDia();
 
   if (!r) {
     return (
@@ -272,6 +275,31 @@ export default function Inicio() {
             <Kpi to="/ventas" etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ${r.ventas.cantidad === 1 ? 'venta' : 'ventas'}`} />
             <Kpi to="/deudas" etiqueta="Por cobrar" valor={formatoMXN(deudas.porCobrar)} detalle={`${deudas.clientes} ${deudas.clientes === 1 ? 'cliente' : 'clientes'}`} />
           </div>
+          <Link
+            to="/carga"
+            className="card"
+            style={{
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              textDecoration: 'none',
+              background: 'var(--fondo-control)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="cuadro-ic" style={{ background: 'var(--primario-fondo)', color: 'var(--primario)' }}>
+                <Truck className="ic" />
+              </span>
+              <div>
+                <p style={{ fontWeight: 600, fontSize: 14 }}>Carga del día</p>
+                <p className="t-aux" style={{ fontSize: 12 }}>
+                  Cargado: {cargaDelDia?.cargado.toString() ?? '0'} · Vendido: {cargaDelDia?.vendido.toString() ?? '0'} · Queda: {cargaDelDia?.queda.toString() ?? '0'}
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="ic" style={{ color: 'var(--texto-tenue)' }} />
+          </Link>
           {atencion}
           {accesos.length > 0 && (
             <section aria-labelledby="qa" className="pila">
@@ -314,7 +342,8 @@ export default function Inicio() {
             </Link>
           ))}
         </div>
-        <div className="rejilla-4">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+          <Kpi grande to="/carga" icono={Truck} etiqueta="Carga del día" valor={`${cargaDelDia?.queda.toString() ?? '0'} quedan`} detalle={`Cargado: ${cargaDelDia?.cargado.toString() ?? '0'} · Vendido: ${cargaDelDia?.vendido.toString() ?? '0'}`} />
           <Kpi grande to="/ventas" icono={Receipt} etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ventas`} />
           <Kpi grande to="/deudas" icono={HandCoins} etiqueta="Cuentas por cobrar" valor={formatoMXN(deudas.porCobrar)} detalle={`${formatoMXN(deudas.totalVencido)} vencido`} />
           <Kpi grande to="/inventario?filtro=bajo" icono={Package} etiqueta="Inventario bajo" valor={String(bajos.length)} detalle="productos por surtir" />

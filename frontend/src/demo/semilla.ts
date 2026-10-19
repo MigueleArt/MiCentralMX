@@ -3,9 +3,11 @@
  * Reproducen el negocio del prototipo UI/UX; las fechas se calculan respecto a hoy.
  */
 import type {
+  Carga,
   Clasificacion,
   Cliente,
   Compra,
+  ExistenciaCarga,
   MovimientoDinero,
   MovimientoInventario,
   Pago,
@@ -62,7 +64,7 @@ export function crearSemilla() {
     ['pieza', 'piezas', false],
     ['costal', 'costales', false],
     ['arpilla', 'arpillas', false],
-    ['tara', 'taras', false],
+    ['tara', 'taras', true],
     ['libra', 'libras', true],
   ].map(([nombre, plural, dec]) => ({ id: nuevoId(), nombre: nombre as string, plural: plural as string, permiteDecimales: dec as boolean, archivadoEn: null }));
   const u = (n: string) => unidades.find((x) => x.nombre === n)!;
@@ -82,7 +84,7 @@ export function crearSemilla() {
     });
     return p;
   };
-  agregar('Jitomate Saladette', 'caja', '15', [
+  agregar('Jitomate Saladette', 'tara', '15', [
     ['Primera / Grande', '420.00', 80, '300.00'],
     ['Segunda / Mediano', '340.00', 35, '250.00'],
     ['Tercera / Chico', '260.00', 12, '180.00'],
@@ -135,14 +137,16 @@ export function crearSemilla() {
   const cli = (n: string) => clientes.find((c) => c.nombre.startsWith(n))!;
 
   const proveedores: Proveedor[] = [
-    ['Agrícola San Juan', '228 123 4567', 'Jitomate, chile serrano'],
-    ['Huertas de Michoacán', '452 234 5678', 'Aguacate Hass'],
-    ['Cítricos del Golfo', '229 345 6789', 'Limón persa'],
-    ['Productores Unidos de Puebla', '222 456 7890', 'Cebolla, papa'],
-  ].map(([nombre, telefono, prods]) => ({ id: nuevoId(), nombre, telefono, productos: prods, archivadoEn: null }));
+    { id: nuevoId(), nombre: 'Rancho La Joya', telefono: '771 123 4567', tipo: 'rancho_propio', productos: 'Jitomate Saladette', archivadoEn: null },
+    { id: nuevoId(), nombre: 'Don Ale', telefono: '775 987 6543', tipo: 'tercero', productos: 'Jitomate Saladette', archivadoEn: null },
+    { id: nuevoId(), nombre: 'Agrícola San Juan', telefono: '228 123 4567', tipo: 'tercero', productos: 'Jitomate, chile serrano', archivadoEn: null },
+    { id: nuevoId(), nombre: 'Huertas de Michoacán', telefono: '452 234 5678', tipo: 'tercero', productos: 'Aguacate Hass', archivadoEn: null },
+    { id: nuevoId(), nombre: 'Cítricos del Golfo', telefono: '229 345 6789', tipo: 'tercero', productos: 'Limón persa', archivadoEn: null },
+    { id: nuevoId(), nombre: 'Productores Unidos de Puebla', telefono: '222 456 7890', tipo: 'tercero', productos: 'Cebolla, papa', archivadoEn: null },
+  ];
   const prov = (n: string) => proveedores.find((p) => p.nombre.startsWith(n))!;
 
-  const renglon = (prod: string, cn: string, cantidad: number): RenglonVenta => {
+  const renglon = (prod: string, cn: string, cantidad: number, cargaId?: string | null, origenNombre?: string | null): RenglonVenta => {
     const c = clas[`${prod}|${cn}`];
     const p = productos.find((x) => x.id === c.productoId)!;
     const un = unidades.find((x) => x.id === p.unidadId)!;
@@ -157,6 +161,8 @@ export function crearSemilla() {
       precio: c.precio,
       precioReferencia: c.precio,
       importe: aImporte(D(c.precio).times(cantidad)),
+      cargaId: cargaId ?? null,
+      origenNombre: origenNombre ?? null,
     };
   };
 
@@ -258,7 +264,77 @@ export function crearSemilla() {
     compra(45, 570, prov('Agrícola'), 'Jitomate Saladette', 'Primera / Grande', 60),
   ];
 
+  const cJitPri = clas['Jitomate Saladette|Primera / Grande'];
+  const cJitSeg = clas['Jitomate Saladette|Segunda / Mediano'];
+  const cJitTer = clas['Jitomate Saladette|Tercera / Chico'];
+
+  const rancho = prov('Rancho');
+  const donAle = prov('Don Ale');
+
+  const carga1Id = nuevoId();
+  const carga2Id = nuevoId();
+
+  const cargas: Carga[] = [
+    {
+      id: carga1Id,
+      fecha: hoy,
+      proveedorId: rancho.id,
+      estado: 'abierta',
+      usuarioId: rodolfo.id,
+      usuarioNombre: rodolfo.nombre,
+      dispositivoId: 'servidor',
+      creadoEnDispositivo: hace(480),
+      cerradaEn: null,
+      renglones: [
+        { cargaId: carga1Id, linea: 1, clasificacionId: cJitPri.id, cantidad: '50.00' },
+        { cargaId: carga1Id, linea: 2, clasificacionId: cJitSeg.id, cantidad: '25.00' },
+        { cargaId: carga1Id, linea: 3, clasificacionId: cJitTer.id, cantidad: '10.00' },
+      ],
+    },
+    {
+      id: carga2Id,
+      fecha: hoy,
+      proveedorId: donAle.id,
+      estado: 'abierta',
+      usuarioId: rodolfo.id,
+      usuarioNombre: rodolfo.nombre,
+      dispositivoId: 'servidor',
+      creadoEnDispositivo: hace(360),
+      cerradaEn: null,
+      renglones: [
+        { cargaId: carga2Id, linea: 1, clasificacionId: cJitPri.id, cantidad: '30.00' },
+        { cargaId: carga2Id, linea: 2, clasificacionId: cJitSeg.id, cantidad: '10.00' },
+      ],
+    },
+  ];
+
+  const existenciasCarga: ExistenciaCarga[] = [
+    { id: nuevoId(), cargaId: carga1Id, clasificacionId: cJitPri.id, cantidad: '50.00' },
+    { id: nuevoId(), cargaId: carga1Id, clasificacionId: cJitSeg.id, cantidad: '25.00' },
+    { id: nuevoId(), cargaId: carga1Id, clasificacionId: cJitTer.id, cantidad: '10.00' },
+    { id: nuevoId(), cargaId: carga2Id, clasificacionId: cJitPri.id, cantidad: '30.00' },
+    { id: nuevoId(), cargaId: carga2Id, clasificacionId: cJitSeg.id, cantidad: '10.00' },
+  ];
+
   const movimientosInventario: MovimientoInventario[] = [];
+  for (const c of cargas) {
+    const p = proveedores.find((x) => x.id === c.proveedorId);
+    for (const r of c.renglones) {
+      const cl = clasificaciones.find((x) => x.id === r.clasificacionId)!;
+      movimientosInventario.push({
+        id: nuevoId(),
+        clasificacionId: r.clasificacionId,
+        productoId: cl.productoId,
+        delta: r.cantidad,
+        tipo: 'carga',
+        referencia: `Carga del día · ${p?.nombre ?? ''}`,
+        motivo: null,
+        usuarioNombre: c.usuarioNombre,
+        creadoEn: c.creadoEnDispositivo,
+        cargaId: c.id,
+      });
+    }
+  }
   for (const c of compras) {
     for (const r of c.renglones) {
       movimientosInventario.push({
@@ -324,6 +400,8 @@ export function crearSemilla() {
     productos,
     clasificaciones,
     existencias,
+    existenciasCarga,
+    cargas,
     clientes,
     proveedores,
     ventas,
