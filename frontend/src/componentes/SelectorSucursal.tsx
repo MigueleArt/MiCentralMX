@@ -99,17 +99,24 @@ export function SelectorSucursal({ compacto = false }: SelectorSucursalProps) {
         onClick={abrirSelector}
         title="Cambiar de sucursal o bodega"
         aria-haspopup="dialog"
+        aria-expanded={abierto}
       >
         <span className="icono-sucursal">
-          <Store className="ic" style={{ width: 16, height: 16 }} />
+          <Store className="ic" />
         </span>
         <span className="info-sucursal">
           <span className="nombre-sucursal">{sesion.negocio.nombre}</span>
-          <span className="ubicacion-sucursal">
-            {sesion.negocio.ubicacion || 'Sucursal activa'}
-          </span>
+          {compacto ? (
+            sesion.negocio.ubicacion ? (
+              <span className="ubicacion-sucursal">· {sesion.negocio.ubicacion}</span>
+            ) : null
+          ) : (
+            <span className="ubicacion-sucursal">
+              {sesion.negocio.ubicacion || 'Sucursal activa'}
+            </span>
+          )}
         </span>
-        <ChevronDown className="chevron-sucursal" style={{ width: 14, height: 14 }} />
+        <ChevronDown className={`chevron-sucursal${abierto ? ' abierto' : ''}`} />
       </button>
 
       {abierto && (
@@ -205,22 +212,6 @@ export function SelectorSucursal({ compacto = false }: SelectorSucursalProps) {
                       key={suc.id}
                       className={`tarjeta-sucursal${esActual ? ' activa' : ''}`}
                       onClick={() => !cambiandoEsta && seleccionar(suc)}
-                      style={{
-                        padding: 14,
-                        borderRadius: 10,
-                        border: esActual
-                          ? '2px solid var(--color-primario, #16a34a)'
-                          : '1px solid var(--borde-1, #e5e7eb)',
-                        background: esActual
-                          ? 'var(--color-primario-fondo, rgba(22, 163, 74, 0.05))'
-                          : 'var(--fondo-tarjeta, #ffffff)',
-                        cursor: esActual ? 'default' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        transition: 'all 0.15s ease',
-                      }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                         <div
@@ -228,8 +219,8 @@ export function SelectorSucursal({ compacto = false }: SelectorSucursalProps) {
                             width: 36,
                             height: 36,
                             borderRadius: 8,
-                            background: esActual ? 'var(--color-primario, #16a34a)' : '#f3f4f6',
-                            color: esActual ? '#ffffff' : '#4b5563',
+                            background: esActual ? 'var(--color-primario)' : 'var(--color-primario-suave)',
+                            color: esActual ? '#ffffff' : 'var(--color-primario)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -240,7 +231,7 @@ export function SelectorSucursal({ compacto = false }: SelectorSucursalProps) {
                         </div>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--texto-1)' }}>
+                            <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--texto)' }}>
                               {suc.nombre}
                             </span>
                             {suc.esMatriz && (
@@ -275,14 +266,14 @@ export function SelectorSucursal({ compacto = false }: SelectorSucursalProps) {
                               gap: 4,
                               fontSize: 12,
                               fontWeight: 600,
-                              color: 'var(--color-primario, #16a34a)',
+                              color: 'var(--color-primario)',
                             }}
                           >
                             <Check className="ic" style={{ width: 14, height: 14 }} />
                             Activa
                           </span>
                         ) : cambiandoEsta ? (
-                          <LoaderCircle className="ic girar" style={{ width: 18, height: 18, color: 'var(--color-primario, #16a34a)' }} />
+                          <LoaderCircle className="ic girar" style={{ width: 18, height: 18, color: 'var(--color-primario)' }} />
                         ) : (
                           <button
                             type="button"

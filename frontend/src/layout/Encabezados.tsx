@@ -18,7 +18,17 @@ export function EncabezadoPagina({ titulo, subtitulo, acciones }: { titulo: Reac
           </p>
         )}
       </div>
-      <div className="acciones" style={{ paddingTop: formato === 'pc' ? 0 : 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div
+        className="acciones"
+        style={{
+          paddingTop: formato === 'pc' ? 0 : 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          flexWrap: formato === 'telefono' ? 'wrap' : 'nowrap',
+          flexShrink: 0,
+        }}
+      >
         <SelectorSucursal compacto />
         <EstadoSync largo={formato === 'pc'} />
         {formato !== 'telefono' && acciones}

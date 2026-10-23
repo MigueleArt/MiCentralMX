@@ -25,6 +25,7 @@ import { useSesionActiva } from '../../auth/SesionContext';
 import { Esqueleto } from '../../componentes/Estados';
 import { FilaMovimiento } from '../../componentes/FilaMovimiento';
 import { Marca } from '../../componentes/Marca';
+import { SelectorSucursal } from '../../componentes/SelectorSucursal';
 import { EstadoSync, useAbrirSincronizacion } from '../../componentes/Sincronizacion';
 import type { Permiso } from '@micentralmx/shared/permisos';
 import { folioCompra, cantidadConUnidad } from '../../dominio/formato';
@@ -256,7 +257,10 @@ export default function Inicio() {
       <>
         <header className="pag-enc" style={{ alignItems: 'center', padding: '14px 16px 12px' }}>
           <Marca tamano={32} texto={20} />
-          <EstadoSync />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <SelectorSucursal compacto />
+            <EstadoSync />
+          </div>
         </header>
         <main className="pag-main">
           <div className="pila-12">
@@ -326,7 +330,7 @@ export default function Inicio() {
 
   return (
     <>
-      <EncabezadoPagina titulo={`Hola, ${nombre}`} subtitulo={`${formatoDiaFecha()} · ${sesion.negocio.nombre}`} />
+      <EncabezadoPagina titulo={`Hola, ${nombre}`} subtitulo={formatoDiaFecha()} />
       <main className="pag-main">
         <div className="fila" style={{ flexWrap: 'wrap', gap: 12 }}>
           {puede('ventas.crear') && (

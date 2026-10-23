@@ -144,37 +144,76 @@ select.inp{appearance:auto}
   gap: 10px;
   width: 100%;
   padding: 8px 12px;
-  background: #f8fafc;
-  border: 1px solid var(--borde-fuerte, #e2e8f0);
+  background: var(--superficie, #fff);
+  border: 1px solid var(--borde);
   border-radius: var(--radio-s, 8px);
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
   font-family: inherit;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 .selector-sucursal-trigger:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--gris-2, #f2f4f3);
+  border-color: var(--borde-fuerte, #c5cec9);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
+.selector-sucursal-trigger:active {
+  background: var(--gris-1, #eef1ef);
+}
+
+/* Modo compacto para barra superior / encabezado */
 .selector-sucursal-trigger.compacto {
-  padding: 6px 10px;
-  background: transparent;
-  border-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: auto;
+  max-width: 280px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px 0 6px;
+  background: var(--superficie, #fff);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-xs, 6px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .selector-sucursal-trigger.compacto:hover {
-  background: var(--gris-1, #f3f4f6);
+  background: var(--gris-2, #f2f4f3);
+  border-color: var(--borde-fuerte, #c5cec9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
 }
+.selector-sucursal-trigger.compacto:active {
+  background: var(--gris-1, #eef1ef);
+}
+
+/* Icono */
 .icono-sucursal {
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  background: var(--color-primario-suave, #e0f2fe);
-  color: var(--color-primario, #0284c7);
+  background: var(--color-primario-suave, #e6f0ed);
+  color: var(--color-primario, #176b5b);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
+.icono-sucursal .ic {
+  width: 16px;
+  height: 16px;
+}
+.selector-sucursal-trigger.compacto .icono-sucursal {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+.selector-sucursal-trigger.compacto .icono-sucursal .ic {
+  width: 12px;
+  height: 12px;
+}
+
+/* Información de sucursal */
 .info-sucursal {
   display: flex;
   flex-direction: column;
@@ -185,6 +224,7 @@ select.inp{appearance:auto}
   font-size: 13px;
   font-weight: 600;
   color: var(--texto);
+  line-height: 1.25;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -192,16 +232,69 @@ select.inp{appearance:auto}
 .ubicacion-sucursal {
   font-size: 11px;
   color: var(--texto-2);
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* En modo compacto se alinean en una sola línea horizontal con el mismo baseline */
+.selector-sucursal-trigger.compacto .info-sucursal {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 210px;
+  line-height: 1;
+}
+.selector-sucursal-trigger.compacto .nombre-sucursal {
+  line-height: 1;
+  max-width: 130px;
+}
+.selector-sucursal-trigger.compacto .ubicacion-sucursal {
+  font-weight: 500;
+  line-height: 1;
+  max-width: 90px;
+}
+
+/* Chevron */
 .chevron-sucursal {
+  width: 14px;
+  height: 14px;
   color: var(--texto-2);
   flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.chevron-sucursal.abierto {
+  transform: rotate(180deg);
+}
+.selector-sucursal-trigger.compacto .chevron-sucursal {
+  width: 13px;
+  height: 13px;
+  margin-left: 1px;
+}
+
+/* Tarjeta en lista de sucursales */
+.tarjeta-sucursal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radio-m, 12px);
+  border: 1px solid var(--borde);
+  background: var(--superficie, #fff);
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 .tarjeta-sucursal:hover:not(.activa) {
-  border-color: var(--color-primario, #16a34a) !important;
+  border-color: var(--color-primario);
+  background: var(--color-primario-sel);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+.tarjeta-sucursal.activa {
+  border: 2px solid var(--color-primario);
+  background: var(--color-primario-sel);
+  cursor: default;
 }
 
