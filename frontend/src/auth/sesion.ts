@@ -130,6 +130,48 @@ export async function restaurarSesion(): Promise<void> {
   }
 }
 
+export async function cambiarSucursalSesion(sucursalId: string): Promise<SesionLocal> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new ErrorSesion('Necesitas Internet para cambiar de sucursal.');
+  }
+
+  const pendientes = await contarPendientes();
+  if (pendientes > 0) {
+    throw new ErrorSesion(
+      pendientes === 1
+        ? 'Hay 1 operación sin sincronizar en esta sucursal. Sincroniza antes de cambiar.'
+        : `Hay ${pendientes} operaciones sin sincronizar en esta sucursal. Sincroniza antes de cambiar.`,
+    );
+  }
+
+  let r: RespuestaLogin;
+  try {
+    r = await api<RespuestaLogin>('POST', '/sucursales/cambiar', { sucursalId });
+  } catch (e) {
+    if (e instanceof ErrorRed) throw new ErrorSesion('Necesitas Internet para cambiar de sucursal.');
+    throw e;
+  }
+
+  // Vaciar tablas de negocio y metadatos de la sucursal anterior
+  await db.transaction('rw', [db.meta, ...db.tablasNegocio], async () => {
+    await Promise.all(db.tablasNegocio.map((t) => t.clear()));
+    await db.meta.clear();
+  });
+
+  fijarToken(r.access_token);
+  const sesion: SesionLocal = {
+    usuario: r.usuario,
+    negocio: r.negocio,
+    configuracion: r.configuracion,
+    iniciadaEn: ahoraIso(),
+  };
+  await db.guardarMeta('sesion', sesion);
+  await db.guardarMeta('ultimoContacto', ahoraIso());
+  await registrarDispositivo(r.negocio.id);
+
+  return sesion;
+}
+
 export async function cerrarSesion(): Promise<void> {
   const pendientes = await contarPendientes();
   if (pendientes > 0) {

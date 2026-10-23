@@ -3,6 +3,7 @@ import { ChevronsLeft, ChevronsRight, Lock } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useSesionActiva } from '../auth/SesionContext';
+import { SelectorSucursal } from '../componentes/SelectorSucursal';
 import { Logotipo, Marca } from '../componentes/Marca';
 import { MODO_DEMO } from '../config';
 import { deudasVista } from '../dominio/consultas';
@@ -86,12 +87,17 @@ function BarraLateral() {
   );
   return (
     <aside className={`side${contraida ? ' contraida' : ''}`} aria-label="Navegación">
-      <div className="fila-entre" style={{ padding: '4px 4px 16px 8px' }}>
+      <div className="fila-entre" style={{ padding: '4px 4px 12px 8px' }}>
         {contraida ? <Logotipo tamano={32} /> : <Marca tamano={32} texto={19} />}
         <button type="button" className="icon-btn" aria-label={contraida ? 'Expandir menú' : 'Contraer menú'} onClick={() => setContraida(!contraida)} style={{ color: 'var(--texto-2)' }}>
           {contraida ? <ChevronsRight className="ic" /> : <ChevronsLeft className="ic" />}
         </button>
       </div>
+      {!contraida && (
+        <div style={{ padding: '0 8px 12px 8px' }}>
+          <SelectorSucursal />
+        </div>
+      )}
       <nav className="pila" style={{ gap: 2 }}>
         {operacion.map(enlace)}
         {admin.length > 0 && !contraida && <p className="grp">ADMINISTRACIÓN</p>}

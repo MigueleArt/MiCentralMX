@@ -11,6 +11,7 @@ const cantidad = (n: string) => numeric(n, { precision: 12, scale: 3 });
 
 export const negocios = pgTable('negocios', {
   id: uuid('id').primaryKey(),
+  matrizId: uuid('matriz_id'),
   nombre: text('nombre').notNull(),
   telefono: text('telefono'),
   ubicacion: text('ubicacion'),
@@ -18,6 +19,17 @@ export const negocios = pgTable('negocios', {
   plazoCreditoDias: integer('plazo_credito_dias').notNull(),
   creadoEn: ts('creado_en').notNull().defaultNow(),
 });
+
+export const usuariosSucursales = pgTable(
+  'usuarios_sucursales',
+  {
+    usuarioId: uuid('usuario_id').notNull(),
+    negocioId: uuid('negocio_id').notNull(),
+    rolId: uuid('rol_id').notNull(),
+    creadoEn: ts('creado_en').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.usuarioId, t.negocioId] })],
+);
 
 export const roles = pgTable('roles', {
   id: uuid('id').primaryKey(),

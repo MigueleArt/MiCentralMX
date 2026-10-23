@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { verificarAcceso } from '../auth/tokens';
 import { conNegocio, type Tx } from '../db/pool';
-import { roles, usuarios } from '../db/esquema';
+import { roles, usuarios, usuariosSucursales } from '../db/esquema';
 import { ErrorHttp, prohibido } from './errores';
 
 export interface UsuarioActual {
@@ -35,22 +35,38 @@ export function identidad(req: Request): { usuarioId: string; negocioId: string 
 
 /** Usuario con su rol vigente: los permisos se revalidan en cada solicitud (propuesta §9). */
 export async function cargarUsuario(tx: Tx, usuarioId: string): Promise<UsuarioActual | null> {
-  const [fila] = await tx
-    .select({ u: usuarios, r: roles })
-    .from(usuarios)
-    .innerJoin(roles, eq(roles.id, usuarios.rolId))
-    .where(eq(usuarios.id, usuarioId));
-  if (!fila) return null;
+  const [u] = await tx.select().from(usuarios).where(eq(usuarios.id, usuarioId));
+  if (!u) return null;
+
+  // 1. Intentar con su rol directo del negocio actual
+  let rol: typeof roles.$inferSelect | undefined;
+  const [rDirecto] = await tx.select().from(roles).where(eq(roles.id, u.rolId));
+  if (rDirecto) {
+    rol = rDirecto;
+  } else {
+    // 2. Si está operando en otra sucursal de la empresa, buscar su rol asignado en esta sucursal
+    const [asig] = await tx
+      .select({ r: roles })
+      .from(usuariosSucursales)
+      .innerJoin(roles, eq(roles.id, usuariosSucursales.rolId))
+      .where(eq(usuariosSucursales.usuarioId, usuarioId));
+    if (asig) {
+      rol = asig.r;
+    }
+  }
+
+  if (!rol) return null;
+
   return {
-    id: fila.u.id,
-    negocioId: fila.u.negocioId,
-    nombre: fila.u.nombre,
-    usuario: fila.u.usuario,
-    rolId: fila.r.id,
-    rolNombre: fila.r.nombre,
-    rolBase: fila.r.base,
-    permisos: fila.r.permisos as Permiso[],
-    activo: fila.u.activo,
+    id: u.id,
+    negocioId: rol.negocioId,
+    nombre: u.nombre,
+    usuario: u.usuario,
+    rolId: rol.id,
+    rolNombre: rol.nombre,
+    rolBase: rol.base,
+    permisos: rol.permisos as Permiso[],
+    activo: u.activo,
   };
 }
 

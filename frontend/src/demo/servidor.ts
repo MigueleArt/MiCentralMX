@@ -1495,6 +1495,67 @@ ruta('POST', '/inventario/alertas/:id/corregir', async ({ usuario, params }) => 
   return ok({ existencia: a.sumaMovimientos });
 });
 
+ruta('GET', '/sucursales', async () => {
+  const negocio = (await valor<Negocio>('negocio'))!;
+  const sucursales = (await valor<Array<{ id: string; nombre: string; ubicacion: string | null; telefono: string | null; esMatriz: boolean }>>('sucursalesExtra')) ?? [];
+  const lista = [
+    {
+      id: negocio.id,
+      nombre: negocio.nombre,
+      ubicacion: negocio.ubicacion,
+      telefono: negocio.telefono,
+      matrizId: null,
+      esMatriz: true,
+      esActual: true,
+      creadoEn: new Date().toISOString(),
+    },
+    ...sucursales.map((s) => ({
+      id: s.id,
+      nombre: s.nombre,
+      ubicacion: s.ubicacion,
+      telefono: s.telefono,
+      matrizId: negocio.id,
+      esMatriz: false,
+      esActual: false,
+      creadoEn: new Date().toISOString(),
+    })),
+  ];
+  return ok(lista);
+});
+
+ruta('POST', '/sucursales', async ({ cuerpo }) => {
+  const c = cuerpo as { nombre: string; ubicacion?: string | null; telefono?: string | null };
+  const negocio = (await valor<Negocio>('negocio'))!;
+  const id = nuevoId();
+  const nueva = {
+    id,
+    nombre: c.nombre,
+    ubicacion: c.ubicacion ?? null,
+    telefono: c.telefono ?? null,
+    matrizId: negocio.id,
+    esMatriz: false,
+    esActual: false,
+    creadoEn: new Date().toISOString(),
+  };
+  const previas = (await valor<any[]>('sucursalesExtra')) ?? [];
+  await fijarValor('sucursalesExtra', [...previas, nueva]);
+  return ok(nueva);
+});
+
+ruta('POST', '/sucursales/cambiar', async ({ cuerpo, usuario }) => {
+  const c = cuerpo as { sucursalId: string };
+  const negocio = (await valor<Negocio>('negocio'))!;
+  const sucursales = (await valor<any[]>('sucursalesExtra')) ?? [];
+  const encontrada = [negocio, ...sucursales].find((s) => s.id === c.sucursalId);
+  const targetNegocio = encontrada ?? { ...negocio, id: c.sucursalId };
+  return ok({
+    access_token: emitirToken(usuario.id),
+    usuario: await usuarioSesion(usuario),
+    negocio: targetNegocio,
+    configuracion: await valor('configuracion'),
+  });
+});
+
 /** Punto de entrada que usa el transporte demo de src/api/cliente.ts. */
 export async function manejarSolicitud(metodo: string, rutaCompleta: string, cuerpo: unknown, token: string | null) {
   // Latencia mínima para que los estados "Sincronizando…" sean visibles.

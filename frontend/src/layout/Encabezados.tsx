@@ -1,6 +1,7 @@
 import { ArrowLeft, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
+import { SelectorSucursal } from '../componentes/SelectorSucursal';
 import { EstadoSync } from '../componentes/Sincronizacion';
 import { useFormato } from '../hooks/useFormato';
 
@@ -17,7 +18,8 @@ export function EncabezadoPagina({ titulo, subtitulo, acciones }: { titulo: Reac
           </p>
         )}
       </div>
-      <div className="acciones" style={{ paddingTop: formato === 'pc' ? 0 : 2 }}>
+      <div className="acciones" style={{ paddingTop: formato === 'pc' ? 0 : 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {formato !== 'pc' && <SelectorSucursal compacto />}
         <EstadoSync largo={formato === 'pc'} />
         {formato !== 'telefono' && acciones}
       </div>

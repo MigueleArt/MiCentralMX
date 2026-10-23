@@ -136,3 +136,72 @@ select.inp{appearance:auto}
 @media (prefers-reduced-motion:reduce){.girar,.skel{animation:none}}
 .marca{font-weight:700;letter-spacing:-0.01em;color:var(--color-primario-osc)}
 .marca span{color:var(--color-acento-texto)}
+
+/* ── Selector de Sucursales y Locales ── */
+.selector-sucursal-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--borde-fuerte, #e2e8f0);
+  border-radius: var(--radio-s, 8px);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.selector-sucursal-trigger:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.selector-sucursal-trigger.compacto {
+  padding: 6px 10px;
+  background: transparent;
+  border-color: transparent;
+}
+.selector-sucursal-trigger.compacto:hover {
+  background: var(--gris-1, #f3f4f6);
+}
+.icono-sucursal {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--color-primario-suave, #e0f2fe);
+  color: var(--color-primario, #0284c7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.info-sucursal {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.nombre-sucursal {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ubicacion-sucursal {
+  font-size: 11px;
+  color: var(--texto-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chevron-sucursal {
+  color: var(--texto-2);
+  flex-shrink: 0;
+}
+.tarjeta-sucursal:hover:not(.activa) {
+  border-color: var(--color-primario, #16a34a) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+

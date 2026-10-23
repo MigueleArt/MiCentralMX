@@ -13,6 +13,7 @@ import { rutasSync } from './modulos/sync/rutas';
 import { rutasUsuarios } from './modulos/usuarios';
 import { rutasVentas } from './modulos/ventas';
 import { rutasLiquidaciones } from './modulos/liquidaciones';
+import { rutasSucursales } from './modulos/sucursales';
 
 export function crearApp() {
   const app = express();
@@ -44,6 +45,7 @@ export function crearApp() {
     rutasRevisiones,
     rutasAlertas,
     rutasLiquidaciones,
+    rutasSucursales,
   );
   api.use((req, _res, next) => next(noEncontrado(`Ruta no disponible: ${req.method} ${req.path}`)));
 

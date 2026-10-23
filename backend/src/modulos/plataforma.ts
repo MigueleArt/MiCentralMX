@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { hashContrasena } from '../auth/tokens';
 import { config } from '../config';
 import { dbPlataforma, type Db } from '../db/pool';
-import { negocios, roles, unidades, usuarios } from '../db/esquema';
+import { negocios, roles, unidades, usuarios, usuariosSucursales } from '../db/esquema';
 import { ErrorHttp, conflicto, esUnicidad, noEncontrado } from '../http/errores';
 import { asincrona } from '../http/ruta';
 
@@ -102,17 +102,22 @@ rutasPlataforma.get(
 
     const resultado = await Promise.all(
       todosNegocios.map(async (n) => {
-        const [conteoUsuarios] = await db
-          .select({ total: sql<number>`count(*)::int` })
-          .from(usuarios)
-          .where(eq(usuarios.negocioId, n.id));
+        const { rows: rConteo } = await db.execute<{ total: number }>(sql`
+          select count(distinct u_id)::int as total from (
+            select id as u_id from usuarios where negocio_id = ${n.id}
+            union
+            select usuario_id as u_id from usuarios_sucursales where negocio_id = ${n.id}
+          ) sub
+        `);
+        const totalUsuarios = rConteo[0]?.total ?? 0;
 
         const [conteoVentas] = await db
           .select({ total: sql<number>`count(*)::int` })
           .from(ventas)
           .where(eq(ventas.negocioId, n.id));
 
-        const [dueno] = await db
+        let dueno: { id: string; nombre: string; usuario: string; activo: boolean; ultimaActividad: Date | null } | undefined;
+        const [duenoDirecto] = await db
           .select({
             id: usuarios.id,
             nombre: usuarios.nombre,
@@ -124,6 +129,24 @@ rutasPlataforma.get(
           .innerJoin(roles, eq(usuarios.rolId, roles.id))
           .where(sql`${usuarios.negocioId} = ${n.id} and ${roles.base} = 'dueno'`);
 
+        if (duenoDirecto) {
+          dueno = duenoDirecto;
+        } else {
+          const [duenoAsig] = await db
+            .select({
+              id: usuarios.id,
+              nombre: usuarios.nombre,
+              usuario: usuarios.usuario,
+              activo: usuarios.activo,
+              ultimaActividad: usuarios.ultimaActividad,
+            })
+            .from(usuariosSucursales)
+            .innerJoin(roles, eq(usuariosSucursales.rolId, roles.id))
+            .innerJoin(usuarios, eq(usuariosSucursales.usuarioId, usuarios.id))
+            .where(sql`${usuariosSucursales.negocioId} = ${n.id} and ${roles.base} = 'dueno'`);
+          dueno = duenoAsig;
+        }
+
         return {
           id: n.id,
           nombre: n.nombre,
@@ -132,7 +155,7 @@ rutasPlataforma.get(
           ventanaOfflineHoras: n.ventanaOfflineHoras,
           plazoCreditoDias: n.plazoCreditoDias,
           creadoEn: n.creadoEn.toISOString(),
-          totalUsuarios: conteoUsuarios?.total ?? 0,
+          totalUsuarios,
           totalVentas: conteoVentas?.total ?? 0,
           dueno: dueno
             ? {

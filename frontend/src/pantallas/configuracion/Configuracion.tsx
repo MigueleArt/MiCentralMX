@@ -11,6 +11,7 @@ import { AvisoLinea } from '../../componentes/Estados';
 import { Campo, Entrada } from '../../componentes/Formulario';
 import { EstadoSync } from '../../componentes/Sincronizacion';
 import { HojaInferior } from '../../componentes/Superpuestos';
+import { SelectorSucursal } from '../../componentes/SelectorSucursal';
 import type { ConfiguracionNegocio, Negocio, Unidad } from '@micentralmx/shared/entidades';
 import { cambiarContrasena, cambiarPermiteDecimalesUnidad, guardarConfiguracion } from '../../dominio/enLinea';
 import { useFormato } from '../../hooks/useFormato';
@@ -228,6 +229,12 @@ export default function Configuracion() {
                   <ChevronRight className="ic" />
                 </Link>
               )}
+              <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid var(--borde-1, #e5e7eb)' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--texto-2)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Sucursal o Bodega Activa
+                </p>
+                <SelectorSucursal />
+              </div>
             </div>
           </section>
 

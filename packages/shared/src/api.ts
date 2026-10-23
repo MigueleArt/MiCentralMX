@@ -452,4 +452,29 @@ export interface UsuarioPlataforma {
   creadoEn: string;
 }
 
+// ── Multi-Sucursal (Gestión de bodegas y locales para Dueño) ────────────────
+
+export interface SucursalResumen {
+  id: string;
+  nombre: string;
+  ubicacion: string | null;
+  telefono: string | null;
+  matrizId: string | null;
+  esMatriz: boolean;
+  esActual: boolean;
+  totalUsuarios?: number;
+  creadoEn: string;
+}
+
+export interface CrearSucursalReq {
+  nombre: string;
+  ubicacion?: string | null;
+  telefono?: string | null;
+}
+
+export interface CambiarSucursalReq {
+  sucursalId: string;
+}
+
+
 

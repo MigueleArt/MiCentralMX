@@ -61,7 +61,7 @@ const limpiarIntentos = (clave: string) => dbApp.execute(sql`delete from intento
 /** Solo pruebas. */
 export const reiniciarLimites = () => dbApp.execute(sql`delete from intentos_login`);
 
-async function emitirRefresh(tx: Tx, usuarioId: string, negocioId: string): Promise<string> {
+export async function emitirRefresh(tx: Tx, usuarioId: string, negocioId: string): Promise<string> {
   const token = nuevoRefresh();
   await tx.insert(sesionesRefresh).values({
     id: uuid(),
