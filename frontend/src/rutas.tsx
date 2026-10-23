@@ -44,6 +44,8 @@ import CargaDelDia from './pantallas/carga/Carga';
 import NuevaCarga from './pantallas/carga/NuevaCarga';
 import DetalleCarga from './pantallas/carga/DetalleCarga';
 import PreciosHoy from './pantallas/inventario/PreciosHoy';
+import Plataforma from './pantallas/plataforma/Plataforma';
+import LoginPlataforma from './pantallas/plataforma/LoginPlataforma';
 
 /** Rutas con sesión: arranca el motor de sincronización mientras haya sesión. */
 function Protegida() {
@@ -93,6 +95,8 @@ const conCualquiera = (permisos: Permiso[], el: ReactNode) => <RequiereCualquier
 
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/plataforma/login', element: <LoginPlataforma /> },
+  { path: '/plataforma', element: <Plataforma /> },
   {
     element: <Protegida />,
     children: [

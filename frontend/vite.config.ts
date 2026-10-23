@@ -43,5 +43,6 @@ export default defineConfig(({ mode }) => ({
   test: {
     environment: 'node',
     setupFiles: ['src/pruebas/preparacion.ts'],
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
   },
 }));

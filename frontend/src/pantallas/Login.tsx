@@ -1,6 +1,6 @@
 import { CircleAlert, Eye, EyeOff, LoaderCircle, Wifi, WifiOff } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router';
+import { Navigate, useNavigate, Link } from 'react-router';
 import { mensajeError } from '../api/cliente';
 import { iniciarSesion } from '../auth/sesion';
 import { useSesion } from '../auth/SesionContext';
@@ -134,11 +134,24 @@ export default function Login() {
           </AvisoLinea>
         )}
 
-        <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center' }}>
+        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
           <span className={`sync ${enLinea ? 's-on' : 's-off'}`} style={{ cursor: 'default' }}>
             {enLinea ? <Wifi className="ic" /> : <WifiOff className="ic" />}
             {enLinea ? 'Conectado' : 'Sin conexión'}
           </span>
+          <Link
+            to="/plataforma/login"
+            style={{
+              fontSize: '0.8rem',
+              color: 'var(--texto-2)',
+              textDecoration: 'none',
+              padding: '4px 8px',
+              borderRadius: 'var(--radio-s)',
+              fontWeight: 500,
+            }}
+          >
+            Acceso SuperAdmin · Plataforma
+          </Link>
         </div>
       </main>
     </div>

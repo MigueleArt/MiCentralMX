@@ -11,7 +11,7 @@ import { hashContrasena } from '../auth/tokens';
 import { config } from '../config';
 import { dbPlataforma, type Db } from '../db/pool';
 import { negocios, roles, unidades, usuarios } from '../db/esquema';
-import { ErrorHttp, conflicto, esUnicidad } from '../http/errores';
+import { ErrorHttp, conflicto, esUnicidad, noEncontrado } from '../http/errores';
 import { asincrona } from '../http/ruta';
 
 export const UNIDADES_INICIALES: Array<[string, string, boolean]> = [
@@ -56,7 +56,22 @@ export async function crearNegocio(db: Db, d: DatosNegocioNuevo) {
   });
 }
 
-function exigirTokenPlataforma(valor: string | undefined) {
+import { eq, desc, sql } from 'drizzle-orm';
+import type { Request } from 'express';
+import { ventas } from '../db/esquema';
+
+function obtenerTokenPlataforma(req: Request): string | undefined {
+  const h = req.header('x-plataforma-token');
+  if (h) return h;
+  const auth = req.header('authorization');
+  if (auth?.startsWith('Bearer ')) return auth.slice(7);
+  return undefined;
+}
+
+export function exigirTokenPlataforma(reqOUValor: Request | string | undefined) {
+  const valor = typeof reqOUValor === 'string' || reqOUValor === undefined
+    ? reqOUValor
+    : obtenerTokenPlataforma(reqOUValor);
   const esperado = config.plataformaToken;
   const ok = !!esperado && !!valor && valor.length === esperado.length && timingSafeEqual(Buffer.from(valor), Buffer.from(esperado));
   if (!ok) throw new ErrorHttp(401, 'Token de plataforma inválido.', 'sin_permiso');
@@ -64,10 +79,128 @@ function exigirTokenPlataforma(valor: string | undefined) {
 
 export const rutasPlataforma = Router();
 
+/** 1. Verificar credenciales de Superadmin */
+rutasPlataforma.post(
+  '/auth/verificar',
+  asincrona(async (req) => {
+    const d = z.object({ token: z.string() }).safeParse(req.body);
+    const token = d.success ? d.data.token : obtenerTokenPlataforma(req);
+    const esperado = config.plataformaToken;
+    const ok = !!esperado && !!token && token.length === esperado.length && timingSafeEqual(Buffer.from(token), Buffer.from(esperado));
+    if (!ok) throw new ErrorHttp(401, 'Credenciales de plataforma incorrectas.', 'sin_permiso');
+    return { ok: true, mensaje: 'Superadministrador autenticado' };
+  }),
+);
+
+/** 2. Listar todos los locales / negocios con estadísticas globales */
+rutasPlataforma.get(
+  '/negocios',
+  asincrona(async (req) => {
+    exigirTokenPlataforma(req);
+    const db = dbPlataforma();
+    const todosNegocios = await db.select().from(negocios).orderBy(desc(negocios.creadoEn));
+
+    const resultado = await Promise.all(
+      todosNegocios.map(async (n) => {
+        const [conteoUsuarios] = await db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(usuarios)
+          .where(eq(usuarios.negocioId, n.id));
+
+        const [conteoVentas] = await db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(ventas)
+          .where(eq(ventas.negocioId, n.id));
+
+        const [dueno] = await db
+          .select({
+            id: usuarios.id,
+            nombre: usuarios.nombre,
+            usuario: usuarios.usuario,
+            activo: usuarios.activo,
+            ultimaActividad: usuarios.ultimaActividad,
+          })
+          .from(usuarios)
+          .innerJoin(roles, eq(usuarios.rolId, roles.id))
+          .where(sql`${usuarios.negocioId} = ${n.id} and ${roles.base} = 'dueno'`);
+
+        return {
+          id: n.id,
+          nombre: n.nombre,
+          telefono: n.telefono,
+          ubicacion: n.ubicacion,
+          ventanaOfflineHoras: n.ventanaOfflineHoras,
+          plazoCreditoDias: n.plazoCreditoDias,
+          creadoEn: n.creadoEn.toISOString(),
+          totalUsuarios: conteoUsuarios?.total ?? 0,
+          totalVentas: conteoVentas?.total ?? 0,
+          dueno: dueno
+            ? {
+                id: dueno.id,
+                nombre: dueno.nombre,
+                usuario: dueno.usuario,
+                activo: dueno.activo,
+                ultimaActividad: dueno.ultimaActividad ? dueno.ultimaActividad.toISOString() : null,
+              }
+            : null,
+        };
+      }),
+    );
+
+    return resultado;
+  }),
+);
+
+/** 3. Detalle completo de un local / negocio */
+rutasPlataforma.get(
+  '/negocios/:id',
+  asincrona(async (req) => {
+    exigirTokenPlataforma(req);
+    const negocioId = String(req.params.id);
+    const db = dbPlataforma();
+    const [n] = await db.select().from(negocios).where(eq(negocios.id, negocioId));
+    if (!n) throw noEncontrado('Local o negocio no encontrado.');
+
+    const listaUsuarios = await db
+      .select({
+        id: usuarios.id,
+        nombre: usuarios.nombre,
+        usuario: usuarios.usuario,
+        activo: usuarios.activo,
+        rolId: roles.id,
+        rolNombre: roles.nombre,
+        rolBase: roles.base,
+        ultimaActividad: usuarios.ultimaActividad,
+        creadoEn: usuarios.creadoEn,
+      })
+      .from(usuarios)
+      .innerJoin(roles, eq(usuarios.rolId, roles.id))
+      .where(eq(usuarios.negocioId, negocioId))
+      .orderBy(desc(usuarios.creadoEn));
+
+    return {
+      id: n.id,
+      nombre: n.nombre,
+      telefono: n.telefono,
+      ubicacion: n.ubicacion,
+      ventanaOfflineHoras: n.ventanaOfflineHoras,
+      plazoCreditoDias: n.plazoCreditoDias,
+      creadoEn: n.creadoEn.toISOString(),
+      usuarios: listaUsuarios.map((u) => ({
+        ...u,
+        negocioId,
+        ultimaActividad: u.ultimaActividad ? u.ultimaActividad.toISOString() : null,
+        creadoEn: u.creadoEn.toISOString(),
+      })),
+    };
+  }),
+);
+
+/** 4. Crear un nuevo local / negocio con su Dueño */
 rutasPlataforma.post(
   '/negocios',
   asincrona(async (req) => {
-    exigirTokenPlataforma(req.header('x-plataforma-token'));
+    exigirTokenPlataforma(req);
     const d = z
       .object({
         nombre: z.string().trim().min(1).max(120),
@@ -83,5 +216,146 @@ rutasPlataforma.post(
       if (esUnicidad(e)) throw conflicto('Ese usuario ya existe.');
       throw e;
     }
+  }),
+);
+
+/** 5. Editar datos generales del local / negocio */
+rutasPlataforma.patch(
+  '/negocios/:id',
+  asincrona(async (req) => {
+    exigirTokenPlataforma(req);
+    const negocioId = String(req.params.id);
+    const d = z
+      .object({
+        nombre: z.string().trim().min(1).max(120).optional(),
+        telefono: z.string().trim().max(30).nullable().optional(),
+        ubicacion: z.string().trim().max(200).nullable().optional(),
+        ventanaOfflineHoras: z.number().int().min(1).max(72).optional(),
+        plazoCreditoDias: z.number().int().min(1).max(120).optional(),
+      })
+      .parse(req.body);
+
+    const db = dbPlataforma();
+    const [actualizado] = await db
+      .update(negocios)
+      .set(d)
+      .where(eq(negocios.id, negocioId))
+      .returning();
+    if (!actualizado) throw noEncontrado('Local o negocio no encontrado.');
+    return actualizado;
+  }),
+);
+
+/** 6. Listar usuarios de un local */
+rutasPlataforma.get(
+  '/negocios/:id/usuarios',
+  asincrona(async (req) => {
+    exigirTokenPlataforma(req);
+    const negocioId = String(req.params.id);
+    const db = dbPlataforma();
+    const listaUsuarios = await db
+      .select({
+        id: usuarios.id,
+        nombre: usuarios.nombre,
+        usuario: usuarios.usuario,
+        activo: usuarios.activo,
+        rolId: roles.id,
+        rolNombre: roles.nombre,
+        rolBase: roles.base,
+        ultimaActividad: usuarios.ultimaActividad,
+        creadoEn: usuarios.creadoEn,
+      })
+      .from(usuarios)
+      .innerJoin(roles, eq(usuarios.rolId, roles.id))
+      .where(eq(usuarios.negocioId, negocioId))
+      .orderBy(desc(usuarios.creadoEn));
+
+    return listaUsuarios.map((u) => ({
+      ...u,
+      negocioId,
+      ultimaActividad: u.ultimaActividad ? u.ultimaActividad.toISOString() : null,
+      creadoEn: u.creadoEn.toISOString(),
+    }));
+  }),
+);
+
+/** 7. Crear usuario en un local específico */
+rutasPlataforma.post(
+  '/negocios/:id/usuarios',
+  asincrona(async (req) => {
+    exigirTokenPlataforma(req);
+    const negocioId = String(req.params.id);
+    const d = z
+      .object({
+        nombre: z.string().trim().min(2).max(120),
+        usuario: z.string().trim().min(3).max(80),
+        contrasena: z.string().min(6).max(200),
+        rolBase: z.enum(['administrador', 'trabajador', 'dueno']),
+      })
+      .parse(req.body);
+
+    const db = dbPlataforma();
+    const [rol] = await db
+      .select()
+      .from(roles)
+      .where(sql`${roles.negocioId} = ${negocioId} and ${roles.base} = ${d.rolBase}`);
+    if (!rol) throw noEncontrado('El rol especificado no existe para este negocio.');
+
+    const hash = await hashContrasena(d.contrasena);
+    try {
+      const nuevoId = uuid();
+      await db.insert(usuarios).values({
+        id: nuevoId,
+        negocioId,
+        nombre: d.nombre,
+        usuario: d.usuario.toLowerCase(),
+        contrasenaHash: hash,
+        rolId: rol.id,
+        activo: true,
+      });
+      return { id: nuevoId, nombre: d.nombre, usuario: d.usuario.toLowerCase(), rolId: rol.id, rolBase: d.rolBase };
+    } catch (e) {
+      if (esUnicidad(e)) throw conflicto('El nombre de usuario ya está registrado.');
+      throw e;
+    }
+  }),
+);
+
+/** 8. Activar o suspender usuario de cualquier local */
+rutasPlataforma.patch(
+  '/usuarios/:id/estado',
+  asincrona(async (req) => {
+    exigirTokenPlataforma(req);
+    const usuarioId = String(req.params.id);
+    const d = z.object({ activo: z.boolean() }).parse(req.body);
+
+    const db = dbPlataforma();
+    const [u] = await db
+      .update(usuarios)
+      .set({ activo: d.activo })
+      .where(eq(usuarios.id, usuarioId))
+      .returning({ id: usuarios.id, activo: usuarios.activo });
+    if (!u) throw noEncontrado('Usuario no encontrado.');
+    return u;
+  }),
+);
+
+/** 9. Restablecer contraseña de cualquier usuario */
+rutasPlataforma.post(
+  '/usuarios/:id/resetear-clave',
+  asincrona(async (req) => {
+    exigirTokenPlataforma(req);
+    const usuarioId = String(req.params.id);
+    const d = z.object({ contrasena: z.string().min(6).max(200) }).parse(req.body);
+    const hash = await hashContrasena(d.contrasena);
+
+    const db = dbPlataforma();
+    const [u] = await db
+      .update(usuarios)
+      .set({ contrasenaHash: hash })
+      .where(eq(usuarios.id, usuarioId))
+      .returning({ id: usuarios.id });
+    if (!u) throw noEncontrado('Usuario no encontrado.');
+    return { ok: true, mensaje: 'Contraseña actualizada exitosamente.' };
   }),
 );

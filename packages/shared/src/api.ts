@@ -418,4 +418,38 @@ export interface DatosCrearAjusteProductor {
   ventaId?: string | null;
 }
 
+// ── Panel de Plataforma (Superadmin) ─────────────────────────────────────────
+
+export interface NegocioPlataforma {
+  id: string;
+  nombre: string;
+  telefono: string | null;
+  ubicacion: string | null;
+  ventanaOfflineHoras: number;
+  plazoCreditoDias: number;
+  creadoEn: string;
+  totalUsuarios: number;
+  totalVentas: number;
+  dueno: {
+    id: string;
+    nombre: string;
+    usuario: string;
+    activo: boolean;
+    ultimaActividad: string | null;
+  } | null;
+}
+
+export interface UsuarioPlataforma {
+  id: string;
+  negocioId: string;
+  nombre: string;
+  usuario: string;
+  activo: boolean;
+  rolId: string;
+  rolNombre: string;
+  rolBase: string | null;
+  ultimaActividad: string | null;
+  creadoEn: string;
+}
+
 
