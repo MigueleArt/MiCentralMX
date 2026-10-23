@@ -15,7 +15,11 @@ function useEnfocar<T extends HTMLElement>() {
   useEffect(() => {
     const previo = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    return () => previo?.focus?.();
+    return () => {
+      if (previo && document.body.contains(previo)) {
+        previo.focus();
+      }
+    };
   }, []);
   return ref;
 }

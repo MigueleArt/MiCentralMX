@@ -3,16 +3,17 @@
  * mismo contrato que debe cumplir la API real. No prueban la API real.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { api, fijarToken, usarTransporte } from '../api/cliente';
+import { api, fijarToken, usarTransporte } from '../../api/cliente';
 import type { OperacionEnRevision, UsuarioNegocio } from '@micentralmx/shared/api';
-import { cerrarSesion, ErrorSesion, iniciarSesion, restaurarSesion } from '../auth/sesion';
-import { db } from '../db/db';
-import { catalogo, clientesVista, existenciasEfectivas, ventaVista } from '../dominio/consultas';
-import { ErrorValidacion } from '../dominio/errores';
-import { guardarConfiguracion } from '../dominio/enLinea';
-import { registrarPago, registrarVenta } from '../dominio/operaciones';
-import { manejarSolicitud, reiniciarServidorDemo } from '../demo/servidor';
-import { sincronizar } from '../sync/motor';
+import { cerrarSesion, ErrorSesion, iniciarSesion, restaurarSesion } from '../../auth/sesion';
+import { db } from '../../db/db';
+import { catalogo, clientesVista, existenciasEfectivas, ventaVista } from '../../dominio/consultas';
+import { ErrorValidacion } from '../../dominio/errores';
+import { guardarConfiguracion } from '../../dominio/enLinea';
+import { registrarPago, registrarVenta } from '../../dominio/operaciones';
+import { manejarSolicitud, reiniciarServidorDemo } from '../../demo/servidor';
+import { sincronizar } from '../../sync/motor';
+
 
 usarTransporte((m, r, c, t) => manejarSolicitud(m, r, c, t));
 

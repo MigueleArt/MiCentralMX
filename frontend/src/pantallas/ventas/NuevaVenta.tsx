@@ -427,6 +427,7 @@ export default function NuevaVenta() {
                       </label>
                       <input
                         type="number"
+                        aria-label={`Cantidad ${c.clasificacion.nombre}`}
                         step={p.unidad.permiteDecimales ? '0.01' : '1'}
                         min="0"
                         placeholder="0"

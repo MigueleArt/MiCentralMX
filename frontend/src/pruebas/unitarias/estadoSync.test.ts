@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { determinarEstadoSync } from '../hooks/useResumenSync';
+import { determinarEstadoSync } from '../../hooks/useResumenSync';
+
 
 const base = {
   enLinea: true,

@@ -7,11 +7,12 @@ import { sql } from 'drizzle-orm';
 import pg from 'pg';
 import { v7 as uuid } from 'uuid';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { reiniciarLimites } from '../src/auth/rutas';
-import { cerrarPools } from '../src/db/pool';
-import { crearNegocio } from '../src/modulos/plataforma';
-import { app, bajar, clasificacion, empujar, entrar, operacion, venta } from './ayuda';
+import { reiniciarLimites } from '../../src/auth/rutas';
+import { cerrarPools } from '../../src/db/pool';
+import { crearNegocio } from '../../src/modulos/plataforma';
+import { app, bajar, clasificacion, empujar, entrar, operacion, venta } from '../ayuda';
 import request from 'supertest';
+
 
 const omitir = process.env.TEST_DB_OMITIR === 'true';
 const suite = omitir ? describe.skip : describe;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { errorNuevaContrasena } from '../auth/validarContrasena';
+import { errorNuevaContrasena } from '../../auth/validarContrasena';
+
 
 describe('HU-003 · restablecimiento administrativo de contraseña', () => {
   it('rechaza una contraseña menor a la política del MVP', () => {

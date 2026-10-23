@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fijarToken, usarTransporte } from '../api/cliente';
-import { iniciarSesion } from '../auth/sesion';
-import { db } from '../db/db';
-import { estadoCuentaProductorLocal, saldosProductoresLocales } from '../dominio/consultas';
-import { registrarMovimientoDinero } from '../dominio/operaciones';
-import { manejarSolicitud, reiniciarServidorDemo } from '../demo/servidor';
-import { sincronizar } from '../sync/motor';
-import { nuevoId } from '../lib/ids';
-import { D, aImporte, sumar } from '../lib/dinero';
+import { fijarToken, usarTransporte } from '../../api/cliente';
+import { iniciarSesion } from '../../auth/sesion';
+import { db } from '../../db/db';
+import { estadoCuentaProductorLocal, saldosProductoresLocales } from '../../dominio/consultas';
+import { registrarMovimientoDinero } from '../../dominio/operaciones';
+import { manejarSolicitud, reiniciarServidorDemo } from '../../demo/servidor';
+import { sincronizar } from '../../sync/motor';
+import { nuevoId } from '../../lib/ids';
+import { D, aImporte, sumar } from '../../lib/dinero';
+
 
 usarTransporte((m, r, c, t) => manejarSolicitud(m, r, c, t));
 

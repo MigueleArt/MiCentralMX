@@ -2,12 +2,13 @@
 import pg from 'pg';
 import request from 'supertest';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { crearApp } from '../src/app';
-import { reiniciarLimites } from '../src/auth/rutas';
-import { cerrarPools, conNegocio } from '../src/db/pool';
-import { bajarPagina } from '../src/modulos/sync/bajada';
-import { ejecutarNocturnas, msHasta } from '../src/tareas/nocturnas';
-import { bajar, clasificacion, empujar, entrar, operacion, venta } from './ayuda';
+import { crearApp } from '../../src/app';
+import { reiniciarLimites } from '../../src/auth/rutas';
+import { cerrarPools, conNegocio } from '../../src/db/pool';
+import { bajarPagina } from '../../src/modulos/sync/bajada';
+import { ejecutarNocturnas, msHasta } from '../../src/tareas/nocturnas';
+import { bajar, clasificacion, empujar, entrar, operacion, venta } from '../ayuda';
+
 
 const omitir = process.env.TEST_DB_OMITIR === 'true';
 const suite = omitir ? describe.skip : describe;
