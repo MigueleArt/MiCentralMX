@@ -14,6 +14,8 @@ services:
       - datos-postgres:/var/lib/postgresql
       # Crea los roles mc_owner, mc_app y mc_plataforma y la base micentralmx en el primer arranque.
       - ./database/inicial:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d micentralmx']
       interval: 5s

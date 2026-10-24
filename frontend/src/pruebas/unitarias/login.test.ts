@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { validarLogin } from '../auth/validarLogin';
+import { validarLogin } from '../../auth/validarLogin';
+
 
 describe('HU-001 · formulario de inicio de sesión', () => {
   it('indica ambos campos cuando están vacíos', () => {

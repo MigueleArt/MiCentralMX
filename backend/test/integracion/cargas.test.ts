@@ -14,12 +14,13 @@ import { and, eq } from 'drizzle-orm';
 import pg from 'pg';
 import { v7 as uuid } from 'uuid';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { reiniciarLimites } from '../src/auth/rutas';
-import { cerrarPools, conNegocio } from '../src/db/pool';
-import { crearNegocio } from '../src/modulos/plataforma';
-import { ejecutarNocturnas } from '../src/tareas/nocturnas';
-import { bajar, clasificacion, empujar, entrar, operacion, venta } from './ayuda';
-import * as t from '../src/db/esquema';
+import { reiniciarLimites } from '../../src/auth/rutas';
+import { cerrarPools, conNegocio } from '../../src/db/pool';
+import { crearNegocio } from '../../src/modulos/plataforma';
+import { ejecutarNocturnas } from '../../src/tareas/nocturnas';
+import { bajar, clasificacion, empujar, entrar, operacion, venta } from '../ayuda';
+import * as t from '../../src/db/esquema';
+
 
 const omitir = process.env.TEST_DB_OMITIR === 'true';
 const suite = omitir ? describe.skip : describe;

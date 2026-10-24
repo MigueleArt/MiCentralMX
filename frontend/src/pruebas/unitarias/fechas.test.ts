@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { haceCuanto } from '../lib/fechas';
+import { haceCuanto } from '../../lib/fechas';
+
 
 describe('HU-109 · actividad reciente de usuarios', () => {
   afterEach(() => vi.useRealTimers());

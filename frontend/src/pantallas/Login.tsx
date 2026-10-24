@@ -39,8 +39,8 @@ export default function Login() {
     setError(null);
     try {
       await iniciarSesion(usuario.trim(), contrasena);
-      await sincronizar();
       navegar('/', { replace: true });
+      void sincronizar();
     } catch (err) {
       setError(mensajeError(err));
     } finally {

@@ -12,6 +12,8 @@
     "db:migrar": "tsx --env-file=.env scripts/migrar.ts",
     "db:semilla": "tsx --env-file=.env scripts/semilla.ts",
     "test": "vitest run",
+    "test:unit": "vitest run test/unitarias",
+    "test:integration": "vitest run test/integracion",
     "tareas:nocturnas": "tsx --env-file=.env scripts/nocturnas.ts"
   },
   "dependencies": {
