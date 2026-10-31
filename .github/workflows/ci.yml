@@ -1,0 +1,300 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Instalar dependencias
+        run: npm ci --no-audit
+      - name: Validar tipos
+        run: npm run typecheck
+
+  build_backend:
+    name: Build backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Instalar dependencias
+        run: npm ci --no-audit
+      - name: Compilar backend
+        run: npm run build --workspace backend
+      - name: Guardar build backend
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-${{ github.sha }}
+          path: backend/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  build_frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Instalar dependencias
+        run: npm ci --no-audit
+      - name: Compilar frontend
+        run: npm run build --workspace frontend
+      - name: Guardar build frontend
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-${{ github.sha }}
+          path: frontend/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  test_frontend:
+    name: Test frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Instalar dependencias
+        run: npm ci --no-audit
+      - name: Ejecutar pruebas frontend
+        run: |
+          mkdir -p frontend/reports
+          npm test --workspace frontend -- --reporter=default --reporter=junit --outputFile.junit=reports/frontend-junit.xml
+      - name: Validar resultado JUnit frontend
+        if: always()
+        run: |
+          node <<'NODE'
+          const { existsSync, readFileSync } = require('node:fs');
+
+          const ruta = 'frontend/reports/frontend-junit.xml';
+          if (!existsSync(ruta)) {
+            throw new Error('Vitest no generó el reporte JUnit frontend; hubo un error de ejecución o configuración.');
+          }
+
+          const xml = readFileSync(ruta, 'utf8');
+          const resumen = xml.match(/<testsuites\b([^>]*)>/);
+          if (!resumen) {
+            throw new Error('El reporte JUnit frontend no contiene un resumen <testsuites> válido.');
+          }
+
+          const atributos = Object.fromEntries(
+            [...resumen[1].matchAll(/\b(tests|failures|errors)="(\d+)"/g)]
+              .map((coincidencia) => [coincidencia[1], Number(coincidencia[2])]),
+          );
+          const total = atributos.tests;
+          const fallidas = atributos.failures;
+          const errores = atributos.errors;
+          const omitidas = [...xml.matchAll(/<testsuite\b([^>]*)>/g)]
+            .reduce((suma, coincidencia) => {
+              const valor = coincidencia[1].match(/\bskipped="(\d+)"/);
+              return suma + Number(valor?.[1] ?? 0);
+            }, 0);
+
+          if (![total, fallidas, errores].every(Number.isInteger)) {
+            throw new Error('El resumen JUnit frontend no contiene contadores válidos.');
+          }
+
+          const aprobadas = total - fallidas - errores - omitidas;
+          console.log(
+            `Frontend: total=${total}, aprobadas=${aprobadas}, fallidas=${fallidas}, errores=${errores}, omitidas=${omitidas}.`,
+          );
+
+          if (total === 0) throw new Error('Vitest no ejecutó pruebas frontend.');
+          if (errores > 0) throw new Error(`Vitest registró ${errores} errores de ejecución frontend.`);
+          if (fallidas > 0) throw new Error(`Vitest registró ${fallidas} pruebas frontend fallidas.`);
+          if (omitidas > 0) throw new Error(`Vitest omitió ${omitidas} pruebas frontend obligatorias.`);
+          NODE
+      - name: Guardar reporte frontend
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-tests-${{ github.sha }}
+          path: frontend/reports/frontend-junit.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  test_backend:
+    name: Test backend
+    runs-on: ubuntu-latest
+    container: node:22-bookworm-slim
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      TEST_DB_OMITIR: "false"
+      POSTGRES_PASSWORD: ci_postgres_efimero
+      MC_OWNER_PASSWORD: ci_owner_efimero
+      MC_APP_PASSWORD: ci_app_efimero
+      MC_PLATAFORMA_PASSWORD: ci_plataforma_efimero
+      JWT_SECRETO: ci_jwt_efimero_0123456789_abcdef
+      PLATAFORMA_TOKEN: ci_plataforma_token_efimero
+      COOKIE_SEGURA: "false"
+      TEST_ADMIN_URL: postgres://postgres:ci_postgres_efimero@postgres:5432/postgres
+      DATABASE_URL: postgres://mc_app:ci_app_efimero@postgres:5432/micentralmx_prueba
+      DATABASE_PLATAFORMA_URL: postgres://mc_plataforma:ci_plataforma_efimero@postgres:5432/micentralmx_prueba
+      DATABASE_OWNER_URL: postgres://mc_owner:ci_owner_efimero@postgres:5432/micentralmx_prueba
+      TZ: America/Mexico_City
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_postgres_efimero
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Instalar herramientas del contenedor
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends ca-certificates git postgresql-client tar zstd
+          rm -rf /var/lib/apt/lists/*
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Configurar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Validar URLs PostgreSQL de CI
+        run: |
+          node <<'NODE'
+          const esperadas = {
+            TEST_ADMIN_URL: ['postgres', 'postgres'],
+            DATABASE_URL: ['mc_app', 'micentralmx_prueba'],
+            DATABASE_PLATAFORMA_URL: ['mc_plataforma', 'micentralmx_prueba'],
+            DATABASE_OWNER_URL: ['mc_owner', 'micentralmx_prueba'],
+          };
+          if (process.env.TEST_DB_OMITIR === 'true') {
+            throw new Error('TEST_DB_OMITIR=true no está permitido en CI.');
+          }
+          for (const [nombre, [usuario, base]] of Object.entries(esperadas)) {
+            const valor = process.env[nombre];
+            if (!valor) throw new Error(`Falta ${nombre}.`);
+            const url = new URL(valor);
+            const puerto = url.port || '5432';
+            const baseActual = decodeURIComponent(url.pathname.slice(1));
+            if (
+              !['postgres:', 'postgresql:'].includes(url.protocol) ||
+              url.hostname !== 'postgres' ||
+              puerto !== '5432' ||
+              url.username !== usuario ||
+              baseActual !== base
+            ) {
+              throw new Error(`${nombre} no apunta al PostgreSQL efímero esperado.`);
+            }
+          }
+          console.log('URLs PostgreSQL de CI validadas.');
+          NODE
+      - name: Esperar PostgreSQL
+        run: |
+          listo=false
+          for intento in $(seq 1 30); do
+            if PGPASSWORD="$POSTGRES_PASSWORD" pg_isready --host=postgres --port=5432 --username=postgres --dbname=postgres >/dev/null 2>&1; then
+              listo=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$listo" != "true" ]; then
+            echo "PostgreSQL efímero no estuvo disponible a tiempo."
+            exit 1
+          fi
+      - name: Inicializar roles PostgreSQL
+        run: PGPASSWORD="$POSTGRES_PASSWORD" psql --host=postgres --port=5432 --username=postgres --dbname=postgres --set=ON_ERROR_STOP=1 --file=database/inicial/01_roles.sql
+      - name: Instalar dependencias
+        run: npm ci --no-audit
+      - name: Ejecutar pruebas backend
+        run: |
+          mkdir -p backend/reports
+          npm test --workspace backend -- --reporter=default --reporter=junit --outputFile.junit=reports/backend-junit.xml
+      - name: Validar resultado JUnit backend
+        if: always()
+        run: |
+          node <<'NODE'
+          const { existsSync, readFileSync } = require('node:fs');
+
+          const ruta = 'backend/reports/backend-junit.xml';
+          if (!existsSync(ruta)) {
+            throw new Error('Vitest no generó el reporte JUnit backend; hubo un error de ejecución o configuración.');
+          }
+
+          const xml = readFileSync(ruta, 'utf8');
+          const resumen = xml.match(/<testsuites\b([^>]*)>/);
+          if (!resumen) {
+            throw new Error('El reporte JUnit backend no contiene un resumen <testsuites> válido.');
+          }
+
+          const atributos = Object.fromEntries(
+            [...resumen[1].matchAll(/\b(tests|failures|errors)="(\d+)"/g)]
+              .map((coincidencia) => [coincidencia[1], Number(coincidencia[2])]),
+          );
+          const total = atributos.tests;
+          const fallidas = atributos.failures;
+          const errores = atributos.errors;
+          const omitidas = [...xml.matchAll(/<testsuite\b([^>]*)>/g)]
+            .reduce((suma, coincidencia) => {
+              const valor = coincidencia[1].match(/\bskipped="(\d+)"/);
+              return suma + Number(valor?.[1] ?? 0);
+            }, 0);
+
+          if (![total, fallidas, errores].every(Number.isInteger)) {
+            throw new Error('El resumen JUnit backend no contiene contadores válidos.');
+          }
+
+          const aprobadas = total - fallidas - errores - omitidas;
+          console.log(
+            `Backend: total=${total}, aprobadas=${aprobadas}, fallidas=${fallidas}, errores=${errores}, omitidas=${omitidas}.`,
+          );
+
+          if (total === 0) throw new Error('Vitest no ejecutó pruebas backend.');
+          if (errores > 0) throw new Error(`Vitest registró ${errores} errores de ejecución backend.`);
+          if (fallidas > 0) throw new Error(`Vitest registró ${fallidas} pruebas backend fallidas.`);
+          if (omitidas > 0) throw new Error(`Vitest omitió ${omitidas} pruebas backend obligatorias.`);
+          NODE
+      - name: Guardar reporte backend
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-tests-${{ github.sha }}
+          path: backend/reports/backend-junit.xml
+          if-no-files-found: warn
+          retention-days: 7
