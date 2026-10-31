@@ -41,6 +41,7 @@ export default defineConfig(({ mode }) => ({
     proxy: { '/api': 'http://localhost:3000' },
   },
   test: {
+    include: ['src/pruebas/**/*.test.ts'],
     environment: 'node',
     setupFiles: ['src/pruebas/preparacion.ts'],
   },
