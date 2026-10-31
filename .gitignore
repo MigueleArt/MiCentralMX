@@ -35,3 +35,10 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+
+# Documentos y reportes temporales de practicas
+*.pdf
+~$*
+captura_*.png
+ENTREGABLE_*.md

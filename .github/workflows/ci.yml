@@ -1,0 +1,194 @@
+name: CI Pipeline - MiCentralMX
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # ETAPA 1: Setup y Verificación de Tipos Estáticos (Typecheck)
+  # ---------------------------------------------------------------------------
+  typecheck:
+    name: 1. Tipado Estático (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar dependencias del monorepo
+        run: npm ci
+
+      - name: Validar tipos de @micentralmx/shared
+        run: npm run typecheck --workspace @micentralmx/shared
+
+      - name: Validar tipos de Backend
+        run: npm run typecheck --workspace micentralmx-api
+
+      - name: Validar tipos de Frontend (PWA)
+        run: npm run typecheck --workspace micentralmx-web
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 2A: Pruebas Unitarias (Backend y Frontend en paralelo)
+  # ---------------------------------------------------------------------------
+  test-unit:
+    name: 2A. Pruebas Unitarias
+    runs-on: ubuntu-latest
+    needs: [typecheck]
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Pruebas unitarias de Backend (Vitest)
+        run: npm run test:unit --workspace micentralmx-api
+
+      - name: Pruebas unitarias de Frontend (Vitest + fake-indexeddb)
+        run: npm run test:unit --workspace micentralmx-web
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 2B: Pruebas de Integración (PostgreSQL 18 Service Container)
+  # ---------------------------------------------------------------------------
+  test-integration:
+    name: 2B. Pruebas de Integración (BD + RLS)
+    runs-on: ubuntu-latest
+    needs: [typecheck]
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres_password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      TEST_ADMIN_URL: postgres://postgres:postgres_password@localhost:5432/postgres
+      DATABASE_OWNER_URL: postgres://mc_owner:owner_password@localhost:5432/micentralmx_test
+      MC_OWNER_PASSWORD: owner_password
+      MC_APP_PASSWORD: app_password
+      MC_PLATAFORMA_PASSWORD: plataforma_password
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Configurar roles en PostgreSQL (01_roles.sql)
+        run: |
+          sudo apt-get install -y postgresql-client
+          PGPASSWORD=postgres_password psql -h localhost -U postgres -d postgres \
+            -v MC_OWNER_PASSWORD="$MC_OWNER_PASSWORD" \
+            -v MC_APP_PASSWORD="$MC_APP_PASSWORD" \
+            -v MC_PLATAFORMA_PASSWORD="$MC_PLATAFORMA_PASSWORD" \
+            -f database/inicial/01_roles.sql
+
+      - name: Ejecutar pruebas de integración Backend (Express + Drizzle + RLS)
+        run: npm run test:integration --workspace micentralmx-api
+
+      - name: Ejecutar pruebas de integración Frontend (Hooks + Sincronización)
+        run: npm run test:integration --workspace micentralmx-web
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 3: Seguridad y Auditoría de Dependencias (SAST)
+  # ---------------------------------------------------------------------------
+  security-audit:
+    name: 3. Auditoría de Seguridad (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Auditar dependencias críticas
+        run: npm audit --audit-level=high
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 4: Compilación y Verificación de Artefactos (Build)
+  # ---------------------------------------------------------------------------
+  build:
+    name: 4. Compilación y Construcción (Artifacts)
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration]
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar Backend (tsup)
+        run: npm run build --workspace micentralmx-api
+
+      - name: Compilar Frontend PWA (Vite build)
+        run: npm run build --workspace micentralmx-web
+
+      - name: Validar construcción de imágenes Docker
+        run: |
+          docker build -t micentralmx-api:ci -f backend/Dockerfile .
+          docker build -t micentralmx-web:ci -f frontend/Dockerfile .
+
+  # ---------------------------------------------------------------------------
+  # ETAPA 5: Compuerta Final de Calidad (Quality Gate / Status Check)
+  # ---------------------------------------------------------------------------
+  quality-gate:
+    name: 5. Quality Gate (Aprobación para Merge)
+    runs-on: ubuntu-latest
+    needs: [typecheck, test-unit, test-integration, security-audit, build]
+    if: always()
+    steps:
+      - name: Verificar estado global del pipeline
+        run: |
+          if [ "${{ needs.typecheck.result }}" != "success" ] || \
+             [ "${{ needs.test-unit.result }}" != "success" ] || \
+             [ "${{ needs.test-integration.result }}" != "success" ] || \
+             [ "${{ needs.security-audit.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ]; then
+            echo "❌ El pipeline de CI ha fallado en una o más fases obligatorias."
+            exit 1
+          fi
+          echo "✅ Todas las compuertas de calidad pasaron exitosamente. Código apto para integración."
