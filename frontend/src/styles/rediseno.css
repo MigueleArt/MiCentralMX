@@ -1,0 +1,104 @@
+/* MiCentralMX: primera mejora visual. Importar después de layout.css. */
+:root {
+  --color-primario: #146c58;
+  --color-primario-osc: #0b4f40;
+  --color-primario-suave: #e0f1e9;
+  --color-primario-tenue: #eff8f3;
+  --color-primario-sel: #f0f8f4;
+  --texto: #182c30;
+  --texto-2: #536a70;
+  --texto-3: #63777e;
+  --fondo: #f2f6f5;
+  --fondo-tabla: #f5f8f7;
+  --borde: #dae5e0;
+  --borde-fuerte: #b8cbc2;
+  --radio-s: 12px;
+  --radio-m: 18px;
+  --radio-l: 22px;
+  --sombra-card: 0 3px 14px rgb(24 44 48 / 4%);
+}
+
+/* Mantiene Inter local para conservar la disponibilidad sin conexión. */
+body { line-height: 1.5; }
+button, input, select, textarea { font-family: inherit; }
+.t-title { font-weight: 750; letter-spacing: -.035em; line-height: 1.2; }
+.t-sec { font-weight: 650; letter-spacing: -.02em; }
+.num { letter-spacing: -.025em; }
+.lbl { font-size: 12px; letter-spacing: .065em; }
+
+.card { box-shadow: var(--sombra-card); }
+a.card, .tile { transition: border-color .16s ease, box-shadow .16s ease; }
+a.card:hover, .tile:hover {
+  border-color: var(--color-primario);
+  box-shadow: 0 5px 18px rgb(20 108 88 / 9%);
+}
+.btn {
+  font-weight: 650;
+  transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+.btn-p { box-shadow: 0 4px 10px rgb(20 108 88 / 16%); }
+.btn-p:hover { box-shadow: 0 5px 14px rgb(20 108 88 / 22%); }
+.btn-q { border-color: var(--borde-fuerte); box-shadow: 0 2px 4px rgb(24 44 48 / 3%); }
+.btn-q:hover { background: var(--color-primario-tenue); border-color: var(--color-primario); }
+.btn-d { background: #b43e3e; }
+.btn-d:hover { background: #963333; }
+.btn:disabled, .btn[aria-disabled="true"] {
+  background: #e9ecea;
+  color: #65736a;
+  border-color: transparent;
+  box-shadow: none;
+}
+.btn:focus-visible, .icon-btn:focus-visible, .chip:focus-visible,
+.rowlink:focus-visible, .tile:focus-visible, .sync:focus-visible,
+.sel-box:focus-visible, .opt:focus-visible, .enlace:focus-visible,
+.nav a:focus-visible, .rail a:focus-visible, .side a:focus-visible,
+a.card:focus-visible, .seg button:focus-visible, .qty button:focus-visible {
+  outline: 3px solid var(--color-primario);
+  outline-offset: 3px;
+}
+.inp { transition: border-color .16s ease, box-shadow .16s ease; }
+.inp:hover:not(:disabled):not([readonly]):not([aria-invalid="true"]):not(.inp-err) {
+  border-color: var(--color-primario);
+}
+.inp:focus { box-shadow: 0 0 0 4px rgb(20 108 88 / 12%); }
+.inp-err:focus, .inp[aria-invalid="true"]:focus {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px rgb(180 62 62 / 15%);
+}
+.chip { border-radius: 999px; }
+.bdg, .sync { border-radius: 8px; }
+.rowlink:hover { background: var(--color-primario-tenue); }
+.rowlink[aria-current="true"] { background: var(--color-primario-suave); }
+.tbl th { font-weight: 650; }
+.tbl tbody tr:hover td { background: var(--color-primario-tenue); }
+.tbl tbody tr.sel:hover td { background: var(--color-primario-sel); }
+.scrim { background: rgb(15 35 32 / 48%); }
+.sheet, .dialog { box-shadow: 0 20px 60px rgb(15 35 32 / 20%); }
+.dialog { border: 1px solid var(--borde); }
+.avatar { background: #d8eee2; }
+.banner-modo { border-bottom: 1px solid #ead3b1; }
+
+/* Conserva anchos, puntos de cambio y posiciones de la navegación. */
+.rail, .side { border-right-color: #d4e2da; }
+.rail a, .side a.it { transition: background-color .16s ease, color .16s ease; }
+.rail a.on, .side a.on { box-shadow: inset 3px 0 0 var(--color-primario); }
+.side .grp { letter-spacing: .08em; }
+.nav { box-shadow: 0 -3px 14px rgb(24 44 48 / 5%); }
+.enc-sec { border-bottom-color: var(--borde); }
+.barra-accion { box-shadow: 0 -3px 12px rgb(24 44 48 / 4%); }
+
+@media (min-width: 768px) {
+  .pag-enc { padding-top: 26px; padding-bottom: 18px; }
+  .pag-main { gap: 18px; }
+}
+@media (min-width: 1280px) {
+  .pag-enc { background: var(--fondo); }
+  .pag-main { gap: 22px; }
+  .t-title { font-size: 32px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .inp, a.card, .tile, .rail a, .side a.it { transition: none; }
+}
+@media print {
+  .card, .btn, .tile, .sheet, .dialog, .nav, .barra-accion { box-shadow: none; }
+}
