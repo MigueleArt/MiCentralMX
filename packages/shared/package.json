@@ -1,0 +1,16 @@
+{
+  "name": "@micentralmx/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Contrato entre la PWA y la API: entidades, sobre de sincronización y permisos.",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}

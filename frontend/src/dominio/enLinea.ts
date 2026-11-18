@@ -1,0 +1,74 @@
+/**
+ * Operaciones solo en línea (decisiones técnicas §4.5): catálogo y precios, ajustes,
+ * cancelaciones, proveedores, usuarios y configuración. El servidor decide y la bajada
+ * actualiza la base local; no pasan por la cola offline.
+ */
+import { api } from '../api/cliente';
+import type { DatosProducto, RolNegocio, SolicitudAjuste, UsuarioNegocio } from '@micentralmx/shared/api';
+import type { ConfiguracionNegocio, Negocio, Producto, Proveedor } from '@micentralmx/shared/entidades';
+import { db } from '../db/db';
+import { sincronizar } from '../sync/motor';
+
+async function yRefrescar<T>(p: Promise<T>): Promise<T> {
+  const r = await p;
+  await sincronizar();
+  return r;
+}
+
+export const crearProducto = (d: DatosProducto) => yRefrescar(api<Producto>('POST', '/productos', d));
+export const editarProducto = (id: string, d: DatosProducto) => yRefrescar(api<Producto>('PATCH', `/productos/${id}`, d));
+export const archivarProducto = (id: string) => yRefrescar(api<void>('POST', `/productos/${id}/archivar`, {}));
+
+export const ajustarInventario = (d: SolicitudAjuste) =>
+  yRefrescar(api<{ delta: string }>('POST', '/inventario/ajustes', d));
+
+export const cancelarVenta = (id: string, motivo: string) => yRefrescar(api<void>('POST', `/ventas/${id}/cancelar`, { motivo }));
+export const confirmarTransferencia = (id: string) =>
+  yRefrescar(api<void>('POST', `/ventas/${id}/confirmar-transferencia`, {}));
+
+export interface DatosClienteEdicion {
+  nombre: string;
+  telefono: string | null;
+  ubicacion: string | null;
+  plazoDias: number | null;
+}
+export const editarCliente = (id: string, d: DatosClienteEdicion) => yRefrescar(api<void>('PATCH', `/clientes/${id}`, d));
+
+export type DatosProveedor = Pick<Proveedor, 'nombre' | 'telefono' | 'productos'> & {
+  tipo?: 'tercero' | 'rancho_propio';
+  comisionTipo?: 'porcentaje' | 'por_unidad' | null;
+  comisionValor?: string | null;
+};
+export const crearProveedor = (d: DatosProveedor) => yRefrescar(api<Proveedor>('POST', '/proveedores', d));
+export const editarProveedor = (id: string, d: DatosProveedor) => yRefrescar(api<Proveedor>('PATCH', `/proveedores/${id}`, d));
+
+export const editarPrecios = (precios: Array<{ clasificacionId: string; precio: string }>) =>
+  yRefrescar(api<{ actualizados: number }>('PATCH', '/catalogo/precios', { precios }));
+
+export const cambiarPermiteDecimalesUnidad = (id: string, permiteDecimales: boolean) =>
+  yRefrescar(api<any>('PATCH', `/catalogo/unidades/${id}`, { permiteDecimales }));
+
+export interface DatosUsuario {
+  nombre: string;
+  usuario: string;
+  rolId: string;
+  contrasena?: string;
+  activo?: boolean;
+}
+export const crearUsuario = (d: DatosUsuario) => api<UsuarioNegocio>('POST', '/usuarios', d);
+export const editarUsuario = (id: string, d: Partial<DatosUsuario>) => api<UsuarioNegocio>('PATCH', `/usuarios/${id}`, d);
+export const editarRol = (id: string, permisos: string[]) => api<RolNegocio>('PUT', `/roles/${id}`, { permisos });
+
+export async function guardarConfiguracion(d: ConfiguracionNegocio & Pick<Negocio, 'nombre' | 'telefono' | 'ubicacion'>) {
+  const actualizada = await api<Negocio & ConfiguracionNegocio>('PATCH', '/configuracion', d);
+  const sesion = await db.leerMeta('sesion');
+  if (sesion) {
+    await db.guardarMeta('sesion', {
+      ...sesion,
+      negocio: { id: actualizada.id, nombre: actualizada.nombre, telefono: actualizada.telefono, ubicacion: actualizada.ubicacion },
+      configuracion: { ventanaOfflineHoras: actualizada.ventanaOfflineHoras, plazoCreditoDias: actualizada.plazoCreditoDias },
+    });
+  }
+}
+export const cambiarContrasena = (actual: string, nueva: string) =>
+  api<void>('POST', '/auth/cambiar-contrasena', { actual, nueva });
