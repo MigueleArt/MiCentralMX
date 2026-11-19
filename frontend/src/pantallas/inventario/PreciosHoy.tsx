@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { CircleAlert, Check, LoaderCircle, WifiOff } from 'lucide-react';
 import { EncabezadoSecundario } from '../../layout/Encabezados';
-import { Esqueleto, AvisoLinea } from '../../componentes/Estados';
+import { Esqueleto, AvisoLinea, EstadoVacio } from '../../componentes/Estados';
+import { Buscador } from '../../componentes/Formulario';
+import { buscarInventario } from '../../dominio/buscarInventario';
 import { useCatalogo } from '../../hooks/useDatosLocales';
 import { useConectividad } from '../../sync/conectividad';
 import { useAvisos } from '../../componentes/Avisos';
@@ -17,6 +19,7 @@ export default function PreciosHoy() {
   const catalogo = useCatalogo();
 
   const [precios, setPrecios] = useState<Record<string, string>>({});
+  const [q, setQ] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +49,9 @@ export default function PreciosHoy() {
   const cambiarPrecio = (clasificacionId: string, val: string) => {
     setPrecios((prev) => ({ ...prev, [clasificacionId]: val }));
   };
+
+  const visibles = buscarInventario(catalogo, q, 'todos');
+  const totalClasVisibles = visibles.reduce((n, p) => n + p.clasificaciones.length, 0);
 
   const guardar = async () => {
     setError(null);
@@ -91,9 +97,33 @@ export default function PreciosHoy() {
             Ajusta los precios de venta para todas las clasificaciones. Los cambios aplicarán de inmediato a las nuevas ventas.
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {catalogo.map((prod) => (
-              <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
+          <Buscador
+            valor={q}
+            alCambiar={setQ}
+            etiqueta="Buscar producto o clasificación"
+            marcador="Buscar producto o clasificación…"
+          />
+
+          {q.trim() && (
+            <p className="t-aux" role="status">
+              {visibles.length} {visibles.length === 1 ? 'producto' : 'productos'} · {totalClasVisibles} {totalClasVisibles === 1 ? 'clasificación' : 'clasificaciones'}
+            </p>
+          )}
+
+          {visibles.length === 0 ? (
+            <EstadoVacio
+              titulo="Sin resultados"
+              texto={`No hay productos que coincidan con “${q}”.`}
+              acciones={
+                <button type="button" className="btn btn-q" onClick={() => setQ('')}>
+                  Limpiar búsqueda
+                </button>
+              }
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {visibles.map((prod) => (
+                <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid var(--borde-tenue)', paddingBottom: 6 }}>
                   <p style={{ fontWeight: 700, fontSize: 16 }}>{prod.producto.nombre}</p>
                   <span className="t-aux">Vendido por {prod.unidad.nombre}</span>
@@ -147,8 +177,9 @@ export default function PreciosHoy() {
                   })}
                 </div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {error && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{error}</AvisoLinea>}
 

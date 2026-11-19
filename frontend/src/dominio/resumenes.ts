@@ -3,10 +3,20 @@
  * (decisiones técnicas §6). Muestran lo que sabe este dispositivo a la hora de la última bajada.
  */
 import type Decimal from 'decimal.js';
-import { db } from '../db/db';
+import type { MetodoPago } from '@micentralmx/shared/entidades';
+import { db, type PagoLocal } from '../db/db';
 import { D, sumar } from '../lib/dinero';
 import { diaLocal } from '../lib/fechas';
-import { cargarOperaciones, catalogo, deudasVista, sincronizacionDe, ventasVista, type VentaVista } from './consultas';
+import {
+  cargarOperaciones,
+  catalogo,
+  deudasVista,
+  ordenCobro,
+  sincronizacionDe,
+  ventasVista,
+  type ClienteVista,
+  type VentaVista,
+} from './consultas';
 import { cantidadConUnidad, ETIQUETA_FORMA_PAGO, ETIQUETA_METODO, folioCompra } from './formato';
 
 export type TipoMovimiento = 'venta' | 'credito' | 'compra' | 'pago' | 'merma' | 'ingreso' | 'egreso';
@@ -54,6 +64,114 @@ export function resumenDeudas(deudas: VentaVista[]) {
     pagadasMes,
     totalPagadoMes: sumar(pagadasMes.map((d) => d.pagado)),
   };
+}
+
+export interface ResumenAbonos {
+  abonadoHoy: Decimal;
+  cantidadHoy: number;
+  abonadoMes: Decimal;
+  cantidadMes: number;
+  recientes: PagoLocal[];
+}
+
+export function resumenAbonos(
+  pagos: PagoLocal[],
+  rechazadas = new Set<string>(),
+  hoy = diaLocal(),
+): ResumenAbonos {
+  const validos = pagos
+    .filter((p) => !(p.operacionId && rechazadas.has(p.operacionId)))
+    .sort((a, b) => b.creadoEnDispositivo.localeCompare(a.creadoEnDispositivo));
+  const mes = hoy.slice(0, 7);
+  const delDia = validos.filter((p) => diaLocal(p.creadoEnDispositivo) === hoy);
+  const delMes = validos.filter((p) => diaLocal(p.creadoEnDispositivo).slice(0, 7) === mes);
+  return {
+    abonadoHoy: sumar(delDia.map((p) => p.monto)),
+    cantidadHoy: delDia.length,
+    abonadoMes: sumar(delMes.map((p) => p.monto)),
+    cantidadMes: delMes.length,
+    recientes: validos.slice(0, 10),
+  };
+}
+
+export interface DeudaClienteResumen {
+  clienteId: string;
+  clienteNombre: string;
+  telefono: string | null;
+  ubicacion: string | null;
+  saldoTotal: Decimal;
+  totalOriginal: Decimal;
+  totalAbonado: Decimal;
+  cantidadDeudas: number;
+  deudasAbiertas: VentaVista[];
+  estado: 'vencida' | 'proxima' | 'pendiente';
+  proximoVencimiento: string | null;
+  ultimoAbono: { fecha: string; monto: string; metodo: MetodoPago } | null;
+}
+
+/** Agrupa deudas abiertas por cliente para control sencillo tipo libreta. */
+export function agruparDeudasPorCliente(
+  deudas: VentaVista[],
+  clientes: ClienteVista[],
+  pagos: PagoLocal[],
+  rechazadas = new Set<string>(),
+): DeudaClienteResumen[] {
+  const mapaDeudas = new Map<string, VentaVista[]>();
+  for (const d of deudas) {
+    if (d.saldo.lte(0) || !d.venta.clienteId) continue;
+    const lista = mapaDeudas.get(d.venta.clienteId) ?? [];
+    lista.push(d);
+    mapaDeudas.set(d.venta.clienteId, lista);
+  }
+
+  const mapaClientes = new Map(clientes.map((c) => [c.cliente.id, c]));
+  const ultimoPagoPorCliente = new Map<string, PagoLocal>();
+  const pagosOrdenados = [...pagos]
+    .filter((p) => !(p.operacionId && rechazadas.has(p.operacionId)))
+    .sort((a, b) => b.creadoEnDispositivo.localeCompare(a.creadoEnDispositivo));
+  for (const p of pagosOrdenados) {
+    if (!ultimoPagoPorCliente.has(p.clienteId)) {
+      ultimoPagoPorCliente.set(p.clienteId, p);
+    }
+  }
+
+  const prioridadEstado: Record<DeudaClienteResumen['estado'], number> = {
+    vencida: 0,
+    proxima: 1,
+    pendiente: 2,
+  };
+
+  const lista: DeudaClienteResumen[] = [];
+  for (const [clienteId, grupo] of mapaDeudas) {
+    const ordenadas = ordenCobro(grupo);
+    const cli = mapaClientes.get(clienteId);
+    const estado: DeudaClienteResumen['estado'] = ordenadas.some((d) => d.deuda === 'vencida')
+      ? 'vencida'
+      : ordenadas.some((d) => d.deuda === 'proxima')
+        ? 'proxima'
+        : 'pendiente';
+    const ult = ultimoPagoPorCliente.get(clienteId);
+    lista.push({
+      clienteId,
+      clienteNombre: cli?.cliente.nombre ?? ordenadas[0]?.venta.clienteNombre ?? 'Cliente',
+      telefono: cli?.cliente.telefono ?? null,
+      ubicacion: cli?.cliente.ubicacion ?? null,
+      saldoTotal: sumar(ordenadas.map((d) => d.saldo)),
+      totalOriginal: sumar(ordenadas.map((d) => d.venta.total)),
+      totalAbonado: sumar(ordenadas.map((d) => d.pagado)),
+      cantidadDeudas: ordenadas.length,
+      deudasAbiertas: ordenadas,
+      estado,
+      proximoVencimiento: ordenadas.find((d) => d.venta.venceEl)?.venta.venceEl ?? null,
+      ultimoAbono: ult ? { fecha: ult.creadoEnDispositivo, monto: ult.monto, metodo: ult.metodo } : null,
+    });
+  }
+
+  return lista.sort(
+    (a, b) =>
+      prioridadEstado[a.estado] - prioridadEstado[b.estado] ||
+      b.saldoTotal.comparedTo(a.saldoTotal),
+  );
 }
 
 export async function inventarioBajo() {

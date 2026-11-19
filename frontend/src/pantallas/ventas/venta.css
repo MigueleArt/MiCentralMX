@@ -15,6 +15,36 @@
 .venta-resumen-movil { margin-top: 20px; padding: 16px; }
 .venta-origen { flex-wrap: wrap; gap: 8px; }
 .venta-origen select { max-width: 100%; min-width: 0; }
+.venta-buscador-rapido { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; position: relative; }
+.venta-buscador-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.venta-buscador-resultados {
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-s);
+  background: var(--superficie);
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.venta-buscador-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--gris-1);
+  background: transparent;
+  color: var(--texto);
+  text-align: left;
+  cursor: pointer;
+}
+.venta-buscador-item:last-child { border-bottom: 0; }
+.venta-buscador-item:hover,
+.venta-buscador-item.activo { background: var(--color-primario-tenue); }
+.venta-buscador-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.venta-buscador-titulo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-weight: 600; }
+.venta-buscador-precio { text-align: right; flex: none; }
 @media (max-width: 767px) {
   .venta-pagina .contenedor-form { min-width: 0; }
   .venta-resumen-titulo .t-sec { font-size: 18px; }

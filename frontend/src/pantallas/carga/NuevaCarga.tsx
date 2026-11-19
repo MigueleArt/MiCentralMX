@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Truck, Plus, Check, LoaderCircle, CircleAlert, X } from 'lucide-react';
 import { useAvisos } from '../../componentes/Avisos';
-import { Esqueleto, AvisoLinea } from '../../componentes/Estados';
-import { Campo, Entrada } from '../../componentes/Formulario';
+import { Esqueleto, AvisoLinea, EstadoVacio } from '../../componentes/Estados';
+import { Buscador, Campo, Entrada } from '../../componentes/Formulario';
 import { ElegirEnLista } from '../../componentes/ElegirEnLista';
 import { EncabezadoSecundario } from '../../layout/Encabezados';
+import { buscarInventario } from '../../dominio/buscarInventario';
 import { useCatalogo, useProveedores } from '../../hooks/useDatosLocales';
 import { diaLocal } from '../../lib/fechas';
 import { D, sumar } from '../../lib/dinero';
@@ -27,6 +28,7 @@ export default function NuevaCarga() {
   const [proveedorId, setProveedorId] = useState<string | null>(null);
   const [fecha, setFecha] = useState(diaLocal());
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
+  const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
@@ -64,6 +66,7 @@ export default function NuevaCarga() {
     }));
 
   const totalUnidades = sumar(renglonesValidos.map((r) => r.cantidad));
+  const visibles = buscarInventario(catalogo, q, 'todos');
 
   const guardarAltaRapida = async () => {
     if (!nuevoNombre.trim()) {
@@ -158,6 +161,7 @@ export default function NuevaCarga() {
             </div>
 
             <ElegirEnLista
+              buscarSiempre
               id="origen"
               titulo="Origen de la carga"
               marcador="Elegir rancho o proveedor"
@@ -194,13 +198,37 @@ export default function NuevaCarga() {
             <label className="step">
               <b>3</b>Cantidades por clasificación
             </label>
-            <p className="t-aux" style={{ marginBottom: 10 }}>
+            <p className="t-aux" style={{ marginBottom: 4 }}>
               Escribe las cantidades que llegaron hoy. Deja en blanco las que no apliquen.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {catalogo.map((prod) => (
-                <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
+            <Buscador
+              valor={q}
+              alCambiar={setQ}
+              etiqueta="Buscar producto para la carga"
+              marcador="Buscar producto o clasificación…"
+            />
+
+            {renglonesValidos.length > 0 && (
+              <p className="t-aux" style={{ fontWeight: 600, color: 'var(--color-primario-osc)' }}>
+                {renglonesValidos.length} {renglonesValidos.length === 1 ? 'clasificación capturada' : 'clasificaciones capturadas'} en esta carga
+              </p>
+            )}
+
+            {visibles.length === 0 ? (
+              <EstadoVacio
+                titulo="Sin resultados"
+                texto={`No hay productos que coincidan con “${q}”.`}
+                acciones={
+                  <button type="button" className="btn btn-q" onClick={() => setQ('')}>
+                    Limpiar búsqueda
+                  </button>
+                }
+              />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {visibles.map((prod) => (
+                  <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, borderBottom: '1px solid var(--borde-tenue)', paddingBottom: 6 }}>
                     <p style={{ fontWeight: 700, fontSize: 15 }}>{prod.producto.nombre}</p>
                     <span className="t-aux">Unidad: {prod.unidad.nombre}</span>
@@ -245,8 +273,9 @@ export default function NuevaCarga() {
                     })}
                   </div>
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Resumen inferior */}

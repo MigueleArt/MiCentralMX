@@ -8,15 +8,17 @@ import {
   LoaderCircle,
   Package,
   Plus,
+  Search,
   Trash2,
   TriangleAlert,
   UserPlus,
   WifiOff,
   ArrowLeftRight,
   Layers,
+  X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { mensajeError } from '../../api/cliente';
 import { useSesionActiva } from '../../auth/SesionContext';
 import { ElegirEnLista } from '../../componentes/ElegirEnLista';
@@ -37,6 +39,7 @@ import { useConectividad } from '../../sync/conectividad';
 import { AltaRapidaCliente } from '../clientes/FormCliente';
 import { InsigniaInventario } from '../../componentes/Insignias';
 import { asignarCargaRenglon } from '../../dominio/consultas';
+import { buscarProductosRapido } from '../../dominio/buscarProductos';
 import './venta.css';
 
 interface ItemClasificacion {
@@ -55,6 +58,7 @@ const nuevoBloque = (clave: number): BloqueProducto => ({ clave, productoId: nul
 
 export default function NuevaVenta() {
   const navegar = useNavigate();
+  const [params] = useSearchParams();
   const formato = useFormato();
   const { sesion, puede, soloLectura } = useSesionActiva();
   const { enLinea } = useConectividad();
@@ -72,6 +76,11 @@ export default function NuevaVenta() {
   const [falloGuardado, setFalloGuardado] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [altaCliente, setAltaCliente] = useState<string | null>(null);
+  const [busquedaRapida, setBusquedaRapida] = useState('');
+  const [buscadorEnfocado, setBuscadorEnfocado] = useState(false);
+  const [indiceRapido, setIndiceRapido] = useState(0);
+  const preseleccionAplicada = useRef(false);
+  const focoPendienteRef = useRef<string | null>(null);
 
   const puedePrecio = puede('ventas.modificar_precio');
   const puedeSinExistencia = puede('ventas.vender_sin_existencia');
@@ -148,21 +157,113 @@ export default function NuevaVenta() {
     return [...porUnidad.values()].map((x) => cantidadConUnidad(x.n.toString(), x.u)).join(' + ');
   })();
 
+  const construirItemsProducto = (p: ProductoVista) => {
+    const initialItems: Record<string, ItemClasificacion> = {};
+    for (const c of p.clasificaciones) {
+      initialItems[c.clasificacion.id] = {
+        cantidad: '',
+        precio: D(c.clasificacion.precio).toString(),
+        cargaId: 'auto',
+      };
+    }
+    return initialItems;
+  };
+
+  useEffect(() => {
+    if (!catalogo || preseleccionAplicada.current) return;
+    const prodParam = params.get('producto');
+    const clasParam = params.get('clasificacion');
+    const productoEncontrado =
+      (prodParam && catalogo.find((x) => x.producto.id === prodParam)) ||
+      (clasParam && catalogo.find((x) => x.clasificaciones.some((c) => c.clasificacion.id === clasParam))) ||
+      null;
+    if (!productoEncontrado) return;
+    preseleccionAplicada.current = true;
+    const itemsInit = construirItemsProducto(productoEncontrado);
+    setBloques([{ clave: 1, productoId: productoEncontrado.producto.id, items: itemsInit }]);
+    const clasObjetivo = clasParam ?? productoEncontrado.clasificaciones[0]?.clasificacion.id;
+    if (clasObjetivo) {
+      focoPendienteRef.current = `1:${clasObjetivo}`;
+    }
+  }, [catalogo, params]);
+
+  useEffect(() => {
+    const claveFoco = focoPendienteRef.current;
+    if (!claveFoco) return;
+    const idFrame = requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLInputElement>(`input[data-cantidad-key="${claveFoco}"]`);
+      if (el) {
+        el.focus();
+        el.select();
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        focoPendienteRef.current = null;
+      }
+    });
+    return () => cancelAnimationFrame(idFrame);
+  }, [bloques]);
+
   const elegirProducto = (bloqueClave: number, productoId: string) => {
     const p = productos.find((x) => x.producto.id === productoId);
-    const initialItems: Record<string, ItemClasificacion> = {};
-    if (p) {
-      for (const c of p.clasificaciones) {
-        initialItems[c.clasificacion.id] = {
-          cantidad: '',
-          precio: D(c.clasificacion.precio).toString(),
-          cargaId: 'auto',
-        };
-      }
-    }
+    const initialItems = p ? construirItemsProducto(p) : {};
     setBloques((prev) =>
       prev.map((b) => (b.clave === bloqueClave ? { ...b, productoId, items: initialItems } : b)),
     );
+  };
+
+  const resultadosRapidos = useMemo(
+    () => (busquedaRapida.trim() || buscadorEnfocado ? buscarProductosRapido(productos, busquedaRapida, 8) : []),
+    [productos, busquedaRapida, buscadorEnfocado],
+  );
+
+  const seleccionarResultadoRapido = (productoId: string, clasificacionId: string) => {
+    const p = productos.find((x) => x.producto.id === productoId);
+    if (!p) return;
+
+    const bloqueExistente = bloques.find((b) => b.productoId === productoId);
+    if (bloqueExistente) {
+      focoPendienteRef.current = `${bloqueExistente.clave}:${clasificacionId}`;
+      // Fuerza actualización para disparar el efecto de foco aun si los bloques no cambian.
+      setBloques((prev) => [...prev]);
+    } else {
+      const bloqueVacio = bloques.find((b) => !b.productoId);
+      const initialItems = construirItemsProducto(p);
+      if (bloqueVacio) {
+        focoPendienteRef.current = `${bloqueVacio.clave}:${clasificacionId}`;
+        setBloques((prev) =>
+          prev.map((b) => (b.clave === bloqueVacio.clave ? { ...b, productoId, items: initialItems } : b)),
+        );
+      } else {
+        const nuevaClave = Math.max(...bloques.map((b) => b.clave), 0) + 1;
+        focoPendienteRef.current = `${nuevaClave}:${clasificacionId}`;
+        setBloques((prev) => [...prev, { clave: nuevaClave, productoId, items: initialItems }]);
+      }
+    }
+
+    setBusquedaRapida('');
+    setBuscadorEnfocado(false);
+    setIndiceRapido(0);
+  };
+
+  const manejarTeclaBuscador = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setBuscadorEnfocado(false);
+      setBusquedaRapida('');
+      return;
+    }
+    if (resultadosRapidos.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIndiceRapido((i) => (i + 1) % resultadosRapidos.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIndiceRapido((i) => (i - 1 + resultadosRapidos.length) % resultadosRapidos.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const elegido = resultadosRapidos[indiceRapido] ?? resultadosRapidos[0];
+      if (elegido) {
+        seleccionarResultadoRapido(elegido.producto.producto.id, elegido.clasificacion.clasificacion.id);
+      }
+    }
   };
 
   const actualizarItem = (
@@ -430,6 +531,7 @@ export default function NuevaVenta() {
                       </label>
                       <input
                         type="number"
+                        data-cantidad-key={`${bloque.clave}:${cid}`}
                         aria-label={`Cantidad ${c.clasificacion.nombre}`}
                         step={p.unidad.permiteDecimales ? '0.01' : '1'}
                         min="0"
@@ -603,8 +705,89 @@ export default function NuevaVenta() {
     </button>
   );
 
+  const buscadorRapido = (
+    <section className="card venta-buscador-rapido" aria-label="Buscador rápido de productos">
+      <div className="venta-buscador-cabecera">
+        <label htmlFor="buscador-rapido-venta" className="lbl" style={{ margin: 0 }}>
+          Buscador rápido de productos
+        </label>
+        <span className="t-aux">Escribe producto o clasificación y presiona Enter</span>
+      </div>
+      <div className="search">
+        <Search className="ic" />
+        <input
+          id="buscador-rapido-venta"
+          type="search"
+          className="inp"
+          aria-label="Buscador rápido de productos"
+          placeholder="Buscar producto o clasificación para agregar rápido…"
+          value={busquedaRapida}
+          onFocus={() => setBuscadorEnfocado(true)}
+          onBlur={() => setTimeout(() => setBuscadorEnfocado(false), 150)}
+          onKeyDown={manejarTeclaBuscador}
+          onChange={(e) => {
+            setBusquedaRapida(e.target.value);
+            setBuscadorEnfocado(true);
+            setIndiceRapido(0);
+          }}
+        />
+        {busquedaRapida && (
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Limpiar búsqueda rápida"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setBusquedaRapida('');
+              setIndiceRapido(0);
+            }}
+            style={{ position: 'absolute', right: 2, top: 2 }}
+          >
+            <X className="ic" />
+          </button>
+        )}
+      </div>
+      {(buscadorEnfocado || busquedaRapida.trim().length > 0) && (
+        <div className="venta-buscador-resultados" role="listbox" aria-label="Coincidencias de productos">
+          {resultadosRapidos.map((r, i) => (
+            <button
+              key={r.clasificacion.clasificacion.id}
+              type="button"
+              role="option"
+              aria-selected={i === indiceRapido}
+              className={`venta-buscador-item${i === indiceRapido ? ' activo' : ''}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => seleccionarResultadoRapido(r.producto.producto.id, r.clasificacion.clasificacion.id)}
+            >
+              <div className="venta-buscador-meta">
+                <div className="venta-buscador-titulo">
+                  <span>{r.producto.producto.nombre}</span>
+                  <span className="venta-resumen-clasificacion">{r.clasificacion.clasificacion.nombre}</span>
+                </div>
+                <div className="t-aux" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span>Disp: {cantidadConUnidad(r.clasificacion.existencia.toString(), r.producto.unidad)}</span>
+                  <InsigniaInventario bajo={r.clasificacion.bajo} sin={r.clasificacion.sinExistencia} />
+                </div>
+              </div>
+              <div className="venta-buscador-precio">
+                <p className="num" style={{ fontWeight: 700 }}>{formatoMXN(r.clasificacion.clasificacion.precio)}</p>
+                <p className="t-aux">por {r.producto.unidad.nombre}</p>
+              </div>
+            </button>
+          ))}
+          {resultadosRapidos.length === 0 && (
+            <p className="t-2" style={{ padding: '12px 14px' }}>
+              No hay productos que coincidan con “{busquedaRapida}”.
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+
   const formulario = (
     <div className="pila-16" style={{ gap: 20 }}>
+      {buscadorRapido}
       {bloques.map((b, i) => renderBloque(b, i))}
       <button
         type="button"

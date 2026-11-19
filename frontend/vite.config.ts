@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { configDefaults } from 'vitest/config';
 
 // Modo demo (`vite --mode demo`): la app habla con un servidor de prueba que
 // corre en el navegador (src/demo). Sin ese modo, todas las llamadas van a /api.
@@ -43,5 +44,6 @@ export default defineConfig(({ mode }) => ({
   test: {
     environment: 'node',
     setupFiles: ['src/pruebas/preparacion.ts'],
+    exclude: [...configDefaults.exclude, 'e2e/**'],
   },
 }));

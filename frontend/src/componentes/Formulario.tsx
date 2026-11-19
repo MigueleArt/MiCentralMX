@@ -1,5 +1,5 @@
 import { CircleAlert, Minus, Plus, Search, X } from 'lucide-react';
-import { useId, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useId, type InputHTMLAttributes, type KeyboardEventHandler, type ReactNode, type RefObject } from 'react';
 import { D } from '../lib/dinero';
 
 export function Campo({
@@ -181,11 +181,17 @@ export function Buscador({
   alCambiar,
   etiqueta,
   marcador,
+  autoFocus,
+  inputRef,
+  onKeyDown,
 }: {
   valor: string;
   alCambiar: (v: string) => void;
   etiqueta: string;
   marcador: string;
+  autoFocus?: boolean;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
 }) {
   const id = useId();
   return (
@@ -194,7 +200,17 @@ export function Buscador({
         {etiqueta}
       </label>
       <Search className="ic" />
-      <input id={id} className="inp" type="search" placeholder={marcador} value={valor} onChange={(e) => alCambiar(e.target.value)} />
+      <input
+        ref={inputRef}
+        id={id}
+        className="inp"
+        type="search"
+        placeholder={marcador}
+        value={valor}
+        autoFocus={autoFocus}
+        onKeyDown={onKeyDown}
+        onChange={(e) => alCambiar(e.target.value)}
+      />
       {valor && (
         <button
           type="button"
@@ -212,6 +228,6 @@ export function Buscador({
 
 /** Coincidencia sin acentos ni mayúsculas. */
 export function coincide(texto: string | null | undefined, busqueda: string): boolean {
-  const n = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const n = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   return n(texto ?? '').includes(n(busqueda.trim()));
 }
