@@ -128,7 +128,7 @@ export default function Revisiones() {
     <>
       {formato === 'telefono' ? <EncabezadoSecundario titulo="Revisiones" volverA="/mas" /> : <EncabezadoPagina titulo="Revisiones" subtitulo="Operaciones que llegaron con observaciones" />}
       <main className={`pag-main${formato === 'telefono' ? ' con-enc-sec' : ''}`}>
-        <div className="pila-16" style={{ maxWidth: 820 }}>
+        <div className="pila-16" style={{ width: '100%', maxWidth: 820, margin: '0 auto' }}>
           <Segmentado<Vista>
             etiqueta="Ver"
             valor={vista}

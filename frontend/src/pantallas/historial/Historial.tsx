@@ -50,7 +50,7 @@ export default function Historial() {
     <>
       {formato === 'telefono' ? <EncabezadoSecundario titulo="Historial" volverA="/mas" /> : <EncabezadoPagina titulo="Historial" />}
       <main className={`pag-main${formato === 'telefono' ? ' con-enc-sec' : ''}`}>
-        <div className="pila-16" style={{ maxWidth: 820 }}>
+        <div className="pila-16" style={{ width: '100%', maxWidth: 820, margin: '0 auto' }}>
           <Buscador valor={texto} alCambiar={setTexto} etiqueta="Buscar en historial" marcador="Buscar en el historial" />
           <Chips<Filtro>
             etiqueta="Categoría"

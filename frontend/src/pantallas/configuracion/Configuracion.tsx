@@ -229,7 +229,7 @@ export default function Configuracion() {
     <>
       {formato === 'telefono' ? <EncabezadoSecundario titulo="Configuración" volverA="/mas" /> : <EncabezadoPagina titulo="Configuración" />}
       <main className={`pag-main${formato === 'telefono' ? ' con-enc-sec' : ''}`}>
-        <div className="pila-16" style={{ maxWidth: 640 }}>
+        <div className="pila-16" style={{ width: '100%', maxWidth: 680, margin: '0 auto' }}>
           <section className="pila">
             <h2 className="lbl">Negocio</h2>
             <div className="card" style={{ overflow: 'hidden' }}>
