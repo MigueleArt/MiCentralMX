@@ -1,13 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { iniciarSesionDemo } from './ayuda';
 
 test.describe('E2E · Módulos y Flujos del Sistema', () => {
   test.beforeEach(async ({ page }) => {
     // Iniciar sesión con Dueño (HU-001)
-    await page.goto('/login');
-    await page.fill('#u', 'rodolfo');
-    await page.fill('#p', 'demo1234');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/');
+    await iniciarSesionDemo(page);
   });
 
   test('HU-042/HU-043: Consulta y búsqueda en listado de ventas', async ({ page }) => {
