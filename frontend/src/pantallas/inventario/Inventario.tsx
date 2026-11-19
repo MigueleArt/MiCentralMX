@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useSesionActiva } from '../../auth/SesionContext';
 import { EstadoVacio, Esqueleto } from '../../componentes/Estados';
-import { Buscador, Chips, coincide } from '../../componentes/Formulario';
+import { Buscador, Chips } from '../../componentes/Formulario';
 import { InsigniaInventario } from '../../componentes/Insignias';
 import { BannerSinConexion } from '../../componentes/Sincronizacion';
 import type { ProductoVista } from '../../dominio/consultas';
@@ -15,7 +15,8 @@ import { formatoMXN } from '../../lib/dinero';
 import Decimal from 'decimal.js';
 import { AlertasConciliacion } from './AlertasConciliacion';
 
-type Filtro = 'todos' | 'bajo' | 'sin';
+import { buscarInventario, type FiltroInventario as Filtro } from '../../dominio/buscarInventario';
+import './inventario.css';
 
 /** Pantalla 15 (Inventario) e Inventario · PC 1440. */
 export default function Inventario() {
@@ -39,11 +40,7 @@ export default function Inventario() {
 
   const bajos = catalogo.filter((p) => p.clasificaciones.some((c) => c.bajo)).length;
   const sin = catalogo.filter((p) => p.clasificaciones.some((c) => c.sinExistencia)).length;
-  const lista = catalogo.filter(
-    (p) =>
-      coincide(`${p.producto.nombre} ${p.clasificaciones.map((c) => c.clasificacion.nombre).join(' ')}`, q) &&
-      (filtro === 'todos' || p.clasificaciones.some((c) => (filtro === 'bajo' ? c.bajo : c.sinExistencia))),
-  );
+  const lista = buscarInventario(catalogo, q, filtro);
   const existencia = (p: ProductoVista, e: Decimal) => cantidadConUnidad(e.toString(), p.unidad);
 
   const acciones = (
@@ -127,17 +124,17 @@ export default function Inventario() {
             </thead>
             <tbody>
               {lista.flatMap((p) =>
-                p.clasificaciones.map((c, i) => (
+                p.clasificaciones.map((c) => (
                   <tr key={c.clasificacion.id}>
                     <td>
-                      {i === 0 && (
+                      {(
                         <Link to={`/inventario/${p.producto.id}`} style={{ textDecoration: 'none', color: 'var(--texto)' }}>
                           <p style={{ fontWeight: 600 }}>{p.producto.nombre}</p>
                           <p className="t-aux">Por {p.unidad.nombre}</p>
                         </Link>
                       )}
                     </td>
-                    <td>{c.clasificacion.nombre}</td>
+                    <td><span className="inventario-clasificacion">{c.clasificacion.nombre}</span></td>
                     <td className="r num" style={{ fontWeight: 600 }}>{existencia(p, c.existencia)}</td>
                     <td className="r num">{formatoMXN(c.clasificacion.precio)}</td>
                     <td>
@@ -182,10 +179,13 @@ export default function Inventario() {
         subtitulo={`${catalogo.length} ${catalogo.length === 1 ? 'producto' : 'productos'}${formato === 'pc' && bajos ? ` · ${bajos} con inventario bajo` : ''}`}
         acciones={acciones}
       />
-      <main className="pag-main" style={formato === 'telefono' ? { paddingBottom: 88 } : undefined}>
+      <main className="pag-main inventario-mejorado" style={formato === 'telefono' ? { paddingBottom: 88 } : undefined}>
         <BannerSinConexion />
         <AlertasConciliacion />
-        <Buscador valor={q} alCambiar={setQ} etiqueta="Buscar producto" marcador="Buscar producto" />
+        <div className="inventario-busqueda">
+          <Buscador valor={q} alCambiar={setQ} etiqueta="Buscar producto" marcador="Buscar producto o clasificación…" />
+          <p className="t-aux">Busca por nombre o clasificación, por ejemplo: jitomate o primera.</p>
+        </div>
         <Chips<Filtro>
           etiqueta="Filtrar inventario"
           valor={filtro}
@@ -196,6 +196,9 @@ export default function Inventario() {
             { valor: 'sin', texto: 'Sin existencia', cuenta: sin },
           ]}
         />
+        <p className="t-aux" role="status">
+          {lista.length} {lista.length === 1 ? 'producto' : 'productos'} · {lista.reduce((n, p) => n + p.clasificaciones.length, 0)} clasificaciones visibles
+        </p>
         {contenido}
         {formato === 'telefono' && puede('inventario.merma') && (
           <Link className="btn btn-q" to="/inventario/mermas">

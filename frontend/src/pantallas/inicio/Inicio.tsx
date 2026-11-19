@@ -34,6 +34,7 @@ import { useTotalesCargaDelDia } from '../../hooks/useDatosLocales';
 import { formatoMXN, formatoMXNSigno, D } from '../../lib/dinero';
 import { formatoDiaFecha, formatoDia, formatoHora } from '../../lib/fechas';
 import { EncabezadoPagina } from '../../layout/Encabezados';
+import './inicio.css';
 
 interface Acceso {
   ruta: string;
@@ -48,29 +49,19 @@ const ACCESOS: Acceso[] = [
   { ruta: '/clientes/nuevo', texto: 'Agregar cliente', icono: UserPlus, permiso: 'clientes.crear' },
 ];
 
-function Kpi({ to, etiqueta, valor, detalle, icono: Icono, grande }: { to?: string; etiqueta: string; valor: string; detalle: string; icono?: LucideIcon; grande?: boolean }) {
+function Kpi({ to, etiqueta, valor, detalle, icono: Icono, grande, tono = 'neutro' }: { to?: string; etiqueta: string; valor: string; detalle: string; icono?: LucideIcon; grande?: boolean; tono?: 'neutro' | 'verde' | 'ambar' }) {
   const cuerpo = (
     <>
-      <p className="t-2" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {Icono && <Icono className="ic" style={{ width: 16, height: 16 }} />}
-        {etiqueta}
-      </p>
-      <p className="num" style={{ fontSize: grande ? 28 : 22, lineHeight: grande ? '34px' : '28px', fontWeight: 700 }}>
-        {valor}
-      </p>
-      <p className="t-aux">{detalle}</p>
+      <div className="inicio-kpi-cabecera">
+        <p className="t-2">{etiqueta}</p>
+        {Icono && <span className="inicio-kpi-icono" aria-hidden="true"><Icono className="ic" /></span>}
+      </div>
+      <p className="num inicio-kpi-valor">{valor}</p>
+      <p className="t-aux inicio-kpi-detalle">{detalle}</p>
     </>
   );
-  const estilo = { padding: grande ? '16px 18px' : '12px 14px', display: 'flex', flexDirection: 'column' as const, gap: grande ? 4 : 0 };
-  return to ? (
-    <Link className="card" to={to} style={estilo}>
-      {cuerpo}
-    </Link>
-  ) : (
-    <div className="card" style={estilo}>
-      {cuerpo}
-    </div>
-  );
+  const clase = `card inicio-kpi inicio-kpi--${tono}${grande ? ' inicio-kpi--grande' : ''}`;
+  return to ? <Link className={clase} to={to}>{cuerpo}</Link> : <div className={clase}>{cuerpo}</div>;
 }
 
 /** Pantallas 01 (teléfono) y 02 (Inicio · PC 1440). */
@@ -104,7 +95,7 @@ export default function Inicio() {
 
   const { deudas, bajos } = r;
   const atencion = (
-    <section className="card" aria-labelledby="att" style={{ overflow: 'hidden' }}>
+    <section className="card inicio-panel inicio-atencion" aria-labelledby="att" style={{ overflow: 'hidden' }}>
       <h2 id="att" className="lbl" style={{ padding: '12px 14px 4px' }}>
         Necesita atención
       </h2>
@@ -231,7 +222,7 @@ export default function Inicio() {
   );
 
   const recientes = (
-    <section aria-labelledby="mr" className={ancho ? 'card' : 'pila'} style={ancho ? { overflow: 'hidden' } : undefined}>
+    <section aria-labelledby="mr" className={ancho ? 'card inicio-panel' : 'pila inicio-recientes'} style={ancho ? { overflow: 'hidden' } : undefined}>
       <div className="fila-entre" style={ancho ? { padding: '16px 16px 6px' } : undefined}>
         <h2 id="mr" className="lbl">
           Movimientos recientes
@@ -258,11 +249,11 @@ export default function Inicio() {
           <Marca tamano={32} texto={20} />
           <EstadoSync />
         </header>
-        <main className="pag-main">
+        <main className="pag-main inicio">
           <div className="pila-12">
             <div>
               <p className="t-2">{formatoDiaFecha()}</p>
-              <h1 style={{ fontSize: 24, lineHeight: '30px', fontWeight: 700 }}>Hola, {nombre}</h1>
+              <h1 className="inicio-saludo">Hola, {nombre}</h1>
             </div>
             {puede('ventas.crear') && (
               <Link className="btn btn-p btn-lg btn-ancho" to="/ventas/nueva">
@@ -272,23 +263,23 @@ export default function Inicio() {
             )}
           </div>
           <div className="rejilla-2">
-            <Kpi to="/ventas" etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ${r.ventas.cantidad === 1 ? 'venta' : 'ventas'}`} />
-            <Kpi to="/deudas" etiqueta="Por cobrar" valor={formatoMXN(deudas.porCobrar)} detalle={`${deudas.clientes} ${deudas.clientes === 1 ? 'cliente' : 'clientes'}`} />
+            <Kpi tono="verde" icono={Receipt} to="/ventas" etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ${r.ventas.cantidad === 1 ? 'venta' : 'ventas'}`} />
+            <Kpi tono="ambar" icono={HandCoins} to="/deudas" etiqueta="Por cobrar" valor={formatoMXN(deudas.porCobrar)} detalle={`${deudas.clientes} ${deudas.clientes === 1 ? 'cliente' : 'clientes'}`} />
           </div>
           <Link
             to="/carga"
-            className="card"
+            className="card inicio-carga"
             style={{
               padding: '12px 14px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               textDecoration: 'none',
-              background: 'var(--fondo-control)',
+              background: 'var(--color-primario-tenue)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="cuadro-ic" style={{ background: 'var(--primario-fondo)', color: 'var(--primario)' }}>
+              <span className="cuadro-ic" style={{ background: 'var(--color-primario-suave)', color: 'var(--color-primario)' }}>
                 <Truck className="ic" />
               </span>
               <div>
@@ -298,7 +289,7 @@ export default function Inicio() {
                 </p>
               </div>
             </div>
-            <ChevronRight className="ic" style={{ color: 'var(--texto-tenue)' }} />
+            <ChevronRight className="ic" style={{ color: 'var(--texto-2)' }} />
           </Link>
           {atencion}
           {accesos.length > 0 && (
@@ -327,8 +318,8 @@ export default function Inicio() {
   return (
     <>
       <EncabezadoPagina titulo={`Hola, ${nombre}`} subtitulo={`${formatoDiaFecha()} · ${sesion.negocio.nombre}`} />
-      <main className="pag-main">
-        <div className="fila" style={{ flexWrap: 'wrap', gap: 12 }}>
+      <main className="pag-main inicio">
+        <div className="inicio-acciones" role="group" aria-label="Acciones rápidas">
           {puede('ventas.crear') && (
             <Link className="btn btn-p btn-lg" to="/ventas/nueva">
               <Plus className="ic" />
@@ -342,17 +333,17 @@ export default function Inicio() {
             </Link>
           ))}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        <div className="inicio-resumen">
           <Kpi grande to="/carga" icono={Truck} etiqueta="Carga del día" valor={`${cargaDelDia?.queda.toString() ?? '0'} quedan`} detalle={`Cargado: ${cargaDelDia?.cargado.toString() ?? '0'} · Vendido: ${cargaDelDia?.vendido.toString() ?? '0'}`} />
-          <Kpi grande to="/ventas" icono={Receipt} etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ventas`} />
-          <Kpi grande to="/deudas" icono={HandCoins} etiqueta="Cuentas por cobrar" valor={formatoMXN(deudas.porCobrar)} detalle={`${formatoMXN(deudas.totalVencido)} vencido`} />
+          <Kpi grande tono="verde" to="/ventas" icono={Receipt} etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ventas`} />
+          <Kpi grande tono="ambar" to="/deudas" icono={HandCoins} etiqueta="Cuentas por cobrar" valor={formatoMXN(deudas.porCobrar)} detalle={`${formatoMXN(deudas.totalVencido)} vencido`} />
           <Kpi grande to="/inventario?filtro=bajo" icono={Package} etiqueta="Inventario bajo" valor={String(bajos.length)} detalle="productos por surtir" />
           <Kpi grande to="/compras" icono={ShoppingCart} etiqueta="Compras de hoy" valor={formatoMXN(r.comprasHoy.total)} detalle={`${r.comprasHoy.cantidad} compras`} />
         </div>
-        <div className="rejilla-3">
+        <div className="inicio-paneles">
           {atencion}
           {recientes}
-          <section className="card" style={{ overflow: 'hidden' }} aria-labelledby="cr">
+          <section className="card inicio-panel" style={{ overflow: 'hidden' }} aria-labelledby="cr">
             <div className="fila-entre" style={{ padding: '16px 16px 6px' }}>
               <h2 id="cr" className="lbl">
                 Compras recientes
