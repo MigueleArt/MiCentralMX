@@ -1,5 +1,8 @@
 import type { ResumenReportes } from '@micentralmx/shared/api';
-import { formatoDia } from '../lib/fechas';
+import { D } from '../lib/dinero';
+import { diaLocal, formatoDia, formatoHora } from '../lib/fechas';
+import type { MovimientoPagoVista, ResumenPagos } from '../pantallas/pagos/filtros';
+import { ETIQUETA_METODO } from './formato';
 import { etiquetaSerieExport } from './reportesLocales';
 
 interface CeldaExcel {
@@ -130,14 +133,15 @@ function crearArchivoZip(entradas: Array<{ nombre: string; contenido: string }>)
   return resultado;
 }
 
+const txt = (valor: string, estilo = ESTILO_NORMAL): CeldaExcel => ({ valor, tipo: 'texto', estilo });
+const num = (valor: string | number, estilo = ESTILO_MONEDA): CeldaExcel => ({
+  valor: Number(valor),
+  tipo: 'numero',
+  estilo,
+});
+const encabezado = (...cols: string[]): CeldaExcel[] => cols.map((c) => txt(c, ESTILO_ENCABEZADO));
+
 function construirFilasReporte(r: ResumenReportes, negocio: string): CeldaExcel[][] {
-  const txt = (valor: string, estilo = ESTILO_NORMAL): CeldaExcel => ({ valor, tipo: 'texto', estilo });
-  const num = (valor: string | number, estilo = ESTILO_MONEDA): CeldaExcel => ({
-    valor: Number(valor),
-    tipo: 'numero',
-    estilo,
-  });
-  const encabezado = (...cols: string[]): CeldaExcel[] => cols.map((c) => txt(c, ESTILO_ENCABEZADO));
   const gran = { dia: 'Diario', semana: 'Semanal', mes: 'Mensual' }[r.granularidad];
 
   const filas: CeldaExcel[][] = [
@@ -267,12 +271,14 @@ const RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>`;
 
-const WORKBOOK_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+function workbookXml(nombreHoja: string): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets>
-    <sheet name="Reporte" sheetId="1" r:id="rId1"/>
+    <sheet name="${escaparXml(nombreHoja)}" sheetId="1" r:id="rId1"/>
   </sheets>
 </workbook>`;
+}
 
 const WORKBOOK_RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -326,22 +332,19 @@ const STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   </cellStyles>
 </styleSheet>`;
 
-/** Genera un libro .xlsx OOXML nativo con formato moneda, encabezados y anchos automáticos. */
-export function generarReporteXlsx(r: ResumenReportes, negocio = 'MiCentralMX'): Uint8Array {
-  const filas = construirFilasReporte(r, negocio);
+function empaquetarHojaXlsx(filas: CeldaExcel[][], nombreHoja: string): Uint8Array {
   const sheetXml = construirHojaXml(filas);
   return crearArchivoZip([
     { nombre: '[Content_Types].xml', contenido: CONTENT_TYPES_XML },
     { nombre: '_rels/.rels', contenido: RELS_XML },
-    { nombre: 'xl/workbook.xml', contenido: WORKBOOK_XML },
+    { nombre: 'xl/workbook.xml', contenido: workbookXml(nombreHoja) },
     { nombre: 'xl/_rels/workbook.xml.rels', contenido: WORKBOOK_RELS_XML },
     { nombre: 'xl/styles.xml', contenido: STYLES_XML },
     { nombre: 'xl/worksheets/sheet1.xml', contenido: sheetXml },
   ]);
 }
 
-export function descargarReporteExcel(r: ResumenReportes, negocio = 'MiCentralMX'): void {
-  const bytes = generarReporteXlsx(r, negocio);
+function descargarArchivoExcel(bytes: Uint8Array, nombreArchivo: string): void {
   const copia = new Uint8Array(bytes.byteLength);
   copia.set(bytes);
   const blob = new Blob([copia.buffer], {
@@ -350,9 +353,71 @@ export function descargarReporteExcel(r: ResumenReportes, negocio = 'MiCentralMX
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `reporte-${r.desde}-${r.hasta}.xlsx`;
+  a.download = nombreArchivo;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Genera un libro .xlsx OOXML nativo con formato moneda, encabezados y anchos automáticos. */
+export function generarReporteXlsx(r: ResumenReportes, negocio = 'MiCentralMX'): Uint8Array {
+  return empaquetarHojaXlsx(construirFilasReporte(r, negocio), 'Reporte');
+}
+
+export function descargarReporteExcel(r: ResumenReportes, negocio = 'MiCentralMX'): void {
+  descargarArchivoExcel(generarReporteXlsx(r, negocio), `reporte-${r.desde}-${r.hasta}.xlsx`);
+}
+
+export interface EntradaExportPagos {
+  negocio?: string;
+  periodoEtiqueta: string;
+  movimientos: MovimientoPagoVista[];
+  resumen: ResumenPagos;
+}
+
+function construirFilasPagos({ negocio = 'MiCentralMX', periodoEtiqueta, movimientos, resumen }: EntradaExportPagos): CeldaExcel[][] {
+  return [
+    [txt(`Movimientos de pagos · ${negocio}`, ESTILO_TITULO)],
+    [txt(`Periodo: ${periodoEtiqueta}`), txt(`Movimientos: ${movimientos.length}`)],
+    [],
+    encabezado('Concepto', 'Valor'),
+    [txt('Ingresos', ESTILO_SUBTITULO), num(resumen.ingresos.toNumber(), ESTILO_MONEDA_DESTACADO)],
+    [txt('Egresos'), num(resumen.egresos.toNumber())],
+    [txt('Balance neto', ESTILO_SUBTITULO), num(resumen.balance.toNumber(), ESTILO_MONEDA_DESTACADO)],
+    [txt('Efectivo (neto)'), num(resumen.efectivoNeto.toNumber())],
+    [txt('Transferencia (neto)'), num(resumen.transferenciaNeto.toNumber())],
+    [],
+    encabezado('Fecha', 'Hora', 'Tipo', 'Categoría', 'Concepto', 'Método', 'Monto ($)', 'Flujo ($)', 'Registró', 'Nota / Referencia'),
+    ...movimientos.map((m): CeldaExcel[] => {
+      const flujo = m.tipo === 'ingreso' ? D(m.monto) : D(m.monto).neg();
+      const referencia = [
+        m.aplicaciones.length > 0 ? `Deuda ${m.aplicaciones.map((a) => a.folio).join(', ')}` : '',
+        m.nota?.trim() ?? '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      return [
+        txt(formatoDia(m.dia)),
+        txt(formatoHora(m.fecha)),
+        txt(m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'),
+        txt(m.categoriaNombre),
+        txt(m.titulo),
+        txt(ETIQUETA_METODO[m.metodo]),
+        num(D(m.monto).toNumber()),
+        num(flujo.toNumber()),
+        txt(m.usuarioNombre),
+        txt(referencia),
+      ];
+    }),
+  ];
+}
+
+/** Genera un libro .xlsx OOXML nativo con el resumen y detalle filtrado de pagos. */
+export function generarPagosXlsx(entrada: EntradaExportPagos): Uint8Array {
+  return empaquetarHojaXlsx(construirFilasPagos(entrada), 'Pagos');
+}
+
+export function descargarPagosExcel(entrada: EntradaExportPagos): void {
+  descargarArchivoExcel(generarPagosXlsx(entrada), `pagos-${diaLocal()}.xlsx`);
 }
