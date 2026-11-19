@@ -1,0 +1,47 @@
+.deudas-cabecera-vista {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.deudas-cliente-resumen {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radio-s);
+  background: var(--fondo-tabla);
+  border: 1px solid var(--gris-1);
+}
+
+.deudas-panel-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.deudas-nota-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gris-1);
+}
+
+.deudas-nota-fila:last-child {
+  border-bottom: 0;
+}
+
+.deudas-abono-monto {
+  font-weight: 700;
+  color: var(--ok-texto);
+}
+
+@media (max-width: 767px) {
+  .deudas-main {
+    padding-bottom: 92px;
+  }
+}

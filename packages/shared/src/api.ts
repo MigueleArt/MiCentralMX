@@ -24,6 +24,7 @@ import type {
   LiquidacionRenglon,
   LiquidacionConcepto,
   AjusteProductor,
+  MovimientoEnvase,
   ComisionTipo,
   ComisionTipoBase,
   TipoConceptoLiquidacion,
@@ -69,6 +70,8 @@ export interface DatosMerma {
   cargaId?: string | null;
 }
 
+export type DatosMovimientoEnvase = Omit<MovimientoEnvase, 'usuarioId' | 'usuarioNombre'>;
+
 export interface DatosOperacion {
   'venta.crear': Venta;
   'pago.crear': Pago;
@@ -76,6 +79,7 @@ export interface DatosOperacion {
   'merma.crear': DatosMerma;
   'cliente.crear': Cliente;
   'movimiento_dinero.crear': MovimientoDinero;
+  'envase.movimiento': DatosMovimientoEnvase;
   carga: Carga;
   'carga.crear': Carga;
 }
@@ -131,6 +135,7 @@ export interface CambiosPull {
   liquidacionRenglones: LiquidacionRenglon[];
   liquidacionConceptos: LiquidacionConcepto[];
   ajustesProductor: AjusteProductor[];
+  movimientosEnvase: MovimientoEnvase[];
 }
 
 const lista = z.array(z.record(z.string(), z.unknown())).default([]);
@@ -157,6 +162,7 @@ export const esquemaRespuestaPull = z.object({
     liquidacionRenglones: lista,
     liquidacionConceptos: lista,
     ajustesProductor: lista,
+    movimientosEnvase: lista,
   }),
 });
 export interface RespuestaPull {
@@ -169,10 +175,60 @@ export interface RespuestaPull {
 
 // ── Pantallas solo en línea (TanStack Query) ────────────────────────────────
 
+export type GranularidadReporte = 'dia' | 'semana' | 'mes';
+
+export interface PuntoSerieReporte {
+  clave: string;
+  etiqueta: string;
+  desde: string;
+  hasta: string;
+  ventasTotal: string;
+  ventasContado: string;
+  ventasCredito: string;
+  ingresosTotal: string;
+  abonos: string;
+  egresos: string;
+  cantidadVentas: number;
+}
+
+export interface ProductoVendidoReporte {
+  productoId: string;
+  nombre: string;
+  clasificacion: string;
+  unidad: string;
+  cantidad: string;
+  importe: string;
+}
+
 export interface ResumenReportes {
   desde: string;
   hasta: string;
+  granularidad: GranularidadReporte;
   ventas: { total: string; cantidad: number; aCredito: number };
+  ventasDetalle: {
+    contadoEfectivo: string;
+    contadoTransferencia: string;
+    transferenciaPorConfirmar: string;
+    credito: string;
+    ticketPromedio: string;
+  };
+  ingresosDetalle: {
+    ventasContado: string;
+    abonosDeudas: string;
+    otrosIngresos: string;
+    totalIngresos: string;
+    egresos: string;
+    balanceNeto: string;
+  };
+  comparativa: {
+    desde: string;
+    hasta: string;
+    ventasTotal: string;
+    ingresosTotal: string;
+    cantidadVentas: number;
+  };
+  serie: PuntoSerieReporte[];
+  topProductos: ProductoVendidoReporte[];
   compras: { total: string; cantidad: number; proveedores: number };
   inventario: { productos: number; bajos: number };
   pagos: { ingresos: string; egresos: string };
@@ -261,6 +317,7 @@ export interface DatosProducto {
   nombre: string;
   unidadId: string;
   umbralBajo: string;
+  kilogramosPorUnidad?: string | null;
   clasificaciones: Array<{ id: string; nombre: string; precio: string; existenciaInicial?: string }>;
 }
 

@@ -12,7 +12,7 @@ import { Campo, Entrada } from '../../componentes/Formulario';
 import { EstadoSync } from '../../componentes/Sincronizacion';
 import { HojaInferior } from '../../componentes/Superpuestos';
 import type { ConfiguracionNegocio, Negocio, Unidad } from '@micentralmx/shared/entidades';
-import { cambiarContrasena, cambiarPermiteDecimalesUnidad, guardarConfiguracion } from '../../dominio/enLinea';
+import { cambiarContrasena, cambiarKilogramosPorUnidad, cambiarPermiteDecimalesUnidad, guardarConfiguracion } from '../../dominio/enLinea';
 import { useFormato } from '../../hooks/useFormato';
 import { useResumenSync } from '../../hooks/useResumenSync';
 import { useUnidades } from '../../hooks/useDatosLocales';
@@ -123,10 +123,29 @@ function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
     }
   };
 
+  const cambiarEquivalencia = async (u: Unidad, valor: string) => {
+    if (!enLinea) return;
+    const normalizado = valor.trim();
+    if (normalizado && (!/^\d+(\.\d{1,3})?$/.test(normalizado) || Number(normalizado) <= 0)) {
+      setError('La equivalencia debe ser un número mayor que cero.');
+      return;
+    }
+    setActualizando(u.id);
+    setError(null);
+    try {
+      await cambiarKilogramosPorUnidad(u.id, normalizado || null);
+      avisar(`Equivalencia de ${u.nombre} actualizada`);
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setActualizando(null);
+    }
+  };
+
   return (
     <HojaInferior titulo="Unidades de medida" alCerrar={alCerrar}>
       <p className="t-aux" style={{ marginBottom: 12 }}>
-        Activa o desactiva si una unidad permite vender y registrar fracciones con decimales (solo en línea).
+        Define si una unidad acepta decimales y el peso sugerido al elegirla. El peso final se guarda en cada producto, porque una caja puede variar según la fruta (solo en línea).
       </p>
       {!enLinea && (
         <AvisoLinea tono="warn" icono={<WifiOff className="ic" />}>
@@ -151,6 +170,24 @@ function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
               <p className="t-aux" style={{ fontSize: 12 }}>
                 {u.permiteDecimales ? 'Acepta fracciones y decimales' : 'Solo cantidades enteras'}
               </p>
+              <label className="t-aux" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                <span>Sugerencia:</span>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  inputMode="decimal"
+                  aria-label={`Kilogramos por ${u.nombre}`}
+                  defaultValue={u.kilogramosPorUnidad ?? ''}
+                  placeholder="Sin equivalencia"
+                  disabled={!enLinea || actualizando === u.id}
+                  onBlur={(e) => {
+                    if ((u.kilogramosPorUnidad ?? '') !== e.currentTarget.value) void cambiarEquivalencia(u, e.currentTarget.value);
+                  }}
+                  style={{ width: 110, minHeight: 34, padding: '4px 8px', border: '1px solid var(--borde)', borderRadius: 8, background: 'var(--fondo)' }}
+                />
+                <span>kg por {u.nombre}</span>
+              </label>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: enLinea ? 'pointer' : 'not-allowed' }}>
               <input
@@ -192,7 +229,7 @@ export default function Configuracion() {
     <>
       {formato === 'telefono' ? <EncabezadoSecundario titulo="Configuración" volverA="/mas" /> : <EncabezadoPagina titulo="Configuración" />}
       <main className={`pag-main${formato === 'telefono' ? ' con-enc-sec' : ''}`}>
-        <div className="pila-16" style={{ maxWidth: 640 }}>
+        <div className="pila-16" style={{ width: '100%', maxWidth: 680, margin: '0 auto' }}>
           <section className="pila">
             <h2 className="lbl">Negocio</h2>
             <div className="card" style={{ overflow: 'hidden' }}>

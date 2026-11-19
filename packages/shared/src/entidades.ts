@@ -10,6 +10,8 @@ export interface Unidad {
   nombre: string;
   plural: string;
   permiteDecimales: boolean;
+  /** Kilogramos contenidos en una unidad (p. ej. una tara de jitomate). */
+  kilogramosPorUnidad?: string | null;
   archivadoEn: string | null;
 }
 
@@ -19,6 +21,8 @@ export interface Producto {
   unidadId: string;
   /** Aviso de inventario bajo, aplicado a cada clasificación. */
   umbralBajo: string;
+  /** Conversión específica del producto; permite que cada caja o tara tenga un peso distinto. */
+  kilogramosPorUnidad?: string | null;
   archivadoEn: string | null;
 }
 
@@ -163,6 +167,23 @@ export interface Pago {
   usuarioNombre: string;
   creadoEnDispositivo: string;
   requiereRevision: boolean;
+}
+
+/** Movimiento de envases retornables por cliente; saldo monetario se lleva por separado. */
+export interface MovimientoEnvase {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  envase: string;
+  tipo: 'entrega' | 'devolucion' | 'saldo_inicial' | 'ajuste';
+  /** Cantidad positiva. En ajustes, direccion define si aumenta o reduce el saldo. */
+  cantidad: string;
+  direccion: 'aumenta' | 'reduce' | null;
+  nota: string | null;
+  ventaId: string | null;
+  usuarioId: string;
+  usuarioNombre: string;
+  creadoEnDispositivo: string;
 }
 
 export interface RenglonCompra {

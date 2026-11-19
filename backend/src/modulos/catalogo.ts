@@ -17,6 +17,7 @@ const esquemaProducto = z.object({
   nombre: z.string().trim().min(1, 'Escribe el nombre del producto.').max(120),
   unidadId: z.uuid(),
   umbralBajo: decimal,
+  kilogramosPorUnidad: z.union([decimal.refine((v) => D(v).gt(0), 'debe ser mayor que cero'), z.null()]).optional(),
   clasificaciones: z
     .array(z.object({ id: z.uuid(), nombre: z.string().trim().min(1).max(80), precio: decimal, existenciaInicial: decimal.optional() }))
     .min(1, 'Agrega al menos una clasificación.')
@@ -32,7 +33,7 @@ async function guardarProducto({ tx, usuario, req }: Contexto, id: string | null
   if (previo?.archivadoEn) throw invalido('El producto está archivado.');
 
   const productoId = id ?? uuid();
-  const valores = { nombre: d.nombre, unidadId: d.unidadId, umbralBajo: D(d.umbralBajo).toString() };
+  const valores = { nombre: d.nombre, unidadId: d.unidadId, umbralBajo: D(d.umbralBajo).toString(), kilogramosPorUnidad: d.kilogramosPorUnidad ?? null };
   if (previo) await tx.update(productos).set(valores).where(eq(productos.id, productoId));
   else await tx.insert(productos).values({ id: productoId, negocioId: usuario.negocioId, ...valores });
 
@@ -265,11 +266,17 @@ rutasCatalogo.patch(
   '/catalogo/unidades/:id',
   rutaNegocio('configuracion.editar', async ({ tx, usuario, req }) => {
     const id = String(req.params.id);
-    const d = z.object({ permiteDecimales: z.boolean() }).parse(req.body);
+    const d = z.object({
+      permiteDecimales: z.boolean().optional(),
+      kilogramosPorUnidad: z.union([decimal.refine((v) => D(v).gt(0), 'debe ser mayor que cero'), z.null()]).optional(),
+    }).refine((v) => v.permiteDecimales !== undefined || v.kilogramosPorUnidad !== undefined).parse(req.body);
     const [u] = await tx.select().from(unidades).where(eq(unidades.id, id));
     if (!u) throw noEncontrado('La unidad no existe.');
-    await tx.update(unidades).set({ permiteDecimales: d.permiteDecimales }).where(eq(unidades.id, id));
-    await registrarAuditoria(tx, usuario, 'configuracion', `${usuario.nombre} cambió decimales de unidad ${u.nombre} a ${d.permiteDecimales}`, {
+    await tx.update(unidades).set({
+      ...(d.permiteDecimales !== undefined ? { permiteDecimales: d.permiteDecimales } : {}),
+      ...(d.kilogramosPorUnidad !== undefined ? { kilogramosPorUnidad: d.kilogramosPorUnidad } : {}),
+    }).where(eq(unidades.id, id));
+    await registrarAuditoria(tx, usuario, 'configuracion', `${usuario.nombre} actualizó la unidad ${u.nombre}`, {
       tabla: 'unidades',
       registroId: id,
     });

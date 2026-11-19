@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Truck, Plus, Check, LoaderCircle, CircleAlert, X } from 'lucide-react';
 import { useAvisos } from '../../componentes/Avisos';
-import { Esqueleto, AvisoLinea } from '../../componentes/Estados';
-import { Campo, Entrada } from '../../componentes/Formulario';
+import { Esqueleto, AvisoLinea, EstadoVacio } from '../../componentes/Estados';
+import { Buscador, Campo, Entrada } from '../../componentes/Formulario';
 import { ElegirEnLista } from '../../componentes/ElegirEnLista';
 import { EncabezadoSecundario } from '../../layout/Encabezados';
+import { buscarInventario } from '../../dominio/buscarInventario';
 import { useCatalogo, useProveedores } from '../../hooks/useDatosLocales';
 import { diaLocal } from '../../lib/fechas';
 import { D, sumar } from '../../lib/dinero';
@@ -27,6 +28,7 @@ export default function NuevaCarga() {
   const [proveedorId, setProveedorId] = useState<string | null>(null);
   const [fecha, setFecha] = useState(diaLocal());
   const [cantidades, setCantidades] = useState<Record<string, string>>({});
+  const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [errores, setErrores] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
@@ -63,7 +65,15 @@ export default function NuevaCarga() {
       cantidad: cant.trim(),
     }));
 
+  const totalesPorUnidad = renglonesValidos.reduce((totales, renglon) => {
+    const unidad = catalogo
+      .flatMap((producto) => producto.clasificaciones.map((clasificacion) => ({ producto, clasificacion })))
+      .find(({ clasificacion }) => clasificacion.clasificacion.id === renglon.clasificacionId)?.producto.unidad;
+    if (unidad) totales.set(unidad.id, { unidad, cantidad: (totales.get(unidad.id)?.cantidad ?? D(0)).plus(renglon.cantidad) });
+    return totales;
+  }, new Map<string, { unidad: (typeof catalogo)[number]['unidad']; cantidad: ReturnType<typeof D> }>());
   const totalUnidades = sumar(renglonesValidos.map((r) => r.cantidad));
+  const visibles = buscarInventario(catalogo, q, 'todos');
 
   const guardarAltaRapida = async () => {
     if (!nuevoNombre.trim()) {
@@ -158,6 +168,7 @@ export default function NuevaCarga() {
             </div>
 
             <ElegirEnLista
+              buscarSiempre
               id="origen"
               titulo="Origen de la carga"
               marcador="Elegir rancho o proveedor"
@@ -194,19 +205,43 @@ export default function NuevaCarga() {
             <label className="step">
               <b>3</b>Cantidades por clasificación
             </label>
-            <p className="t-aux" style={{ marginBottom: 10 }}>
+            <p className="t-aux" style={{ marginBottom: 4 }}>
               Escribe las cantidades que llegaron hoy. Deja en blanco las que no apliquen.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {catalogo.map((prod) => (
-                <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
+            <Buscador
+              valor={q}
+              alCambiar={setQ}
+              etiqueta="Buscar producto para la carga"
+              marcador="Buscar producto o clasificación…"
+            />
+
+            {renglonesValidos.length > 0 && (
+              <p className="t-aux" style={{ fontWeight: 600, color: 'var(--color-primario-osc)' }}>
+                {renglonesValidos.length} {renglonesValidos.length === 1 ? 'clasificación capturada' : 'clasificaciones capturadas'} en esta carga
+              </p>
+            )}
+
+            {visibles.length === 0 ? (
+              <EstadoVacio
+                titulo="Sin resultados"
+                texto={`No hay productos que coincidan con “${q}”.`}
+                acciones={
+                  <button type="button" className="btn btn-q" onClick={() => setQ('')}>
+                    Limpiar búsqueda
+                  </button>
+                }
+              />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {visibles.map((prod) => (
+                  <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, borderBottom: '1px solid var(--borde-tenue)', paddingBottom: 6 }}>
                     <p style={{ fontWeight: 700, fontSize: 15 }}>{prod.producto.nombre}</p>
                     <span className="t-aux">Unidad: {prod.unidad.nombre}</span>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                     {prod.clasificaciones.map((c) => {
                       const cid = c.clasificacion.id;
                       const val = cantidades[cid] ?? '';
@@ -218,17 +253,20 @@ export default function NuevaCarga() {
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             gap: 12,
-                            padding: '6px 0',
-                            borderBottom: '1px solid var(--borde-tenue)',
+                            padding: 12,
+                            minHeight: 94,
+                            border: '1px solid var(--borde-tenue)',
+                            borderRadius: 10,
+                            background: val ? 'var(--primario-fondo)' : 'var(--fondo-elevado)',
                           }}
                         >
                           <div style={{ flex: 1 }}>
                             <p style={{ fontWeight: 600, fontSize: 14 }}>{c.clasificacion.nombre}</p>
                             <p className="t-aux" style={{ fontSize: 12 }}>
-                              Existencia actual: {c.existencia.toString()} {prod.unidad.plural}
+                              Disponible ahora: {c.existencia.toString()} {prod.unidad.plural}
                             </p>
                           </div>
-                          <div style={{ width: 110, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 112, display: 'flex', alignItems: 'center', gap: 4 }}>
                             <input
                               type="number"
                               step={prod.unidad.permiteDecimales ? '0.01' : '1'}
@@ -237,7 +275,8 @@ export default function NuevaCarga() {
                               value={val}
                               onChange={(e) => cambiarCantidad(cid, e.target.value)}
                               className="entrada num"
-                              style={{ textAlign: 'right', fontWeight: 600, fontSize: 16 }}
+                              aria-label={`Cantidad de ${c.clasificacion.nombre} en ${prod.producto.nombre}`}
+                              style={{ textAlign: 'center', fontWeight: 700, fontSize: 22, minHeight: 54, padding: 8 }}
                             />
                           </div>
                         </div>
@@ -245,17 +284,23 @@ export default function NuevaCarga() {
                     })}
                   </div>
                 </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Resumen inferior */}
           {totalUnidades.gt(0) && (
-            <div className="card" style={{ padding: 14, background: 'var(--primario-fondo)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, color: 'var(--primario)' }}>Total en esta carga:</span>
-              <span className="num" style={{ fontWeight: 700, fontSize: 18, color: 'var(--primario)' }}>
-                {totalUnidades.toString()} unidades
-              </span>
+            <div className="card pila-12" style={{ padding: 16, background: 'var(--primario-fondo)' }}>
+              <span style={{ fontWeight: 700, color: 'var(--primario)' }}>Resumen de la carga</span>
+              <div className="fila" style={{ flexWrap: 'wrap', gap: 12 }}>
+                {[...totalesPorUnidad.values()].map(({ unidad, cantidad }) => (
+                  <span key={unidad.id} className="num" style={{ fontSize: 20, fontWeight: 800, color: 'var(--primario)' }}>
+                    {cantidad.toString()} {unidad.plural}
+                  </span>
+                ))}
+              </div>
+              <span className="t-aux">El sistema suma cada unidad por separado; el peso en kg requiere configurar una equivalencia por producto.</span>
             </div>
           )}
 

@@ -232,7 +232,7 @@ export default function Usuarios() {
     <>
       {formato === 'telefono' ? <EncabezadoSecundario titulo="Usuarios" volverA="/mas" /> : <EncabezadoPagina titulo="Usuarios" subtitulo="Roles y permisos" acciones={agregar} />}
       <main className={`pag-main${formato === 'telefono' ? ' con-enc-sec con-barra' : ''}`}>
-        <div className="pila-16" style={{ maxWidth: 720 }}>{cuerpo()}</div>
+        <div className="pila-16" style={{ width: '100%', maxWidth: 760, margin: '0 auto' }}>{cuerpo()}</div>
       </main>
       {formato === 'telefono' && <div className="barra-accion">{agregar}</div>}
       {editando && roles.data && <FormUsuario usuario={editando === 'nuevo' ? null : editando} roles={roles.data} alCerrar={() => setEditando(null)} />}

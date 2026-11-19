@@ -1,0 +1,137 @@
+.pagos-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagos-toolbar .search {
+  flex: 1;
+  min-width: 220px;
+}
+
+.pagos-toolbar-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.pagos-filtros-activos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagos-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-primario-suave);
+  color: var(--color-primario-osc);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pagos-maestro-detalle {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.pagos-lista-col {
+  flex: 1.5;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pagos-detalle-panel {
+  flex: 1;
+  min-width: 320px;
+  max-width: 440px;
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pagos-grupo-enc {
+  padding: 10px 16px;
+  background: var(--fondo-tabla);
+  border-bottom: 1px solid var(--gris-1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pagos-fila {
+  transition: background-color 0.15s ease;
+  align-items: flex-start;
+}
+
+.pagos-fila[aria-current='true'] {
+  background: var(--color-primario-suave);
+  box-shadow: inset 3px 0 0 var(--color-primario);
+}
+
+.pagos-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.pagos-nota {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--texto-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pagos-detalle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radio-s);
+  background: var(--fondo-tabla);
+  border: 1px solid var(--gris-1);
+}
+
+.pagos-kpi-metodos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.pagos-kpi-metodo-linea {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+@media (max-width: 767px) {
+  .pagos-toolbar .search {
+    flex-basis: 100%;
+  }
+
+  .pagos-toolbar-acciones {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

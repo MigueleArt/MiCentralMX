@@ -10,7 +10,16 @@ import { db } from '../../db/db';
 import { catalogo, clientesVista, existenciasEfectivas, ventaVista } from '../../dominio/consultas';
 import { ErrorValidacion } from '../../dominio/errores';
 import { guardarConfiguracion } from '../../dominio/enLinea';
-import { registrarPago, registrarVenta } from '../../dominio/operaciones';
+import {
+  crearCliente,
+  registrarCarga,
+  registrarCompra,
+  registrarMerma,
+  registrarMovimientoDinero,
+  registrarPago,
+  registrarVenta,
+} from '../../dominio/operaciones';
+import { diaLocal, sumarDias } from '../../lib/fechas';
 import { manejarSolicitud, reiniciarServidorDemo } from '../../demo/servidor';
 import { sincronizar } from '../../sync/motor';
 
@@ -266,5 +275,175 @@ describe('sesión', () => {
         clienteId: null, formaPago: 'efectivo', venceEl: null, enLinea: false, motivoSinExistencia: null,
       }),
     ).rejects.toThrow(ErrorSesion);
+  });
+});
+
+const esperarTick = () => new Promise((r) => setTimeout(r, 2));
+
+describe('sincronización completa (7 operaciones offline y segundo dispositivo)', () => {
+  it('sincroniza las 7 operaciones offline sin duplicados y las replica completas en un segundo dispositivo', async () => {
+    await entrar('rodolfo');
+
+    const cJitPri = await clasificacion('Jitomate Saladette', 'Primera / Grande');
+    const cAguaPri = await clasificacion('Aguacate Hass', 'Primera / Grande');
+    const proveedores = await db.proveedores.toArray();
+    const donAle = proveedores.find((p) => p.nombre.includes('Don Ale'))!;
+    const agricola = proveedores.find((p) => p.nombre.includes('Agrícola'))!;
+    const stockInicial = await existenciasEfectivas();
+    const stockJitAntes = stockInicial.get(cJitPri.clasificacion.id)!;
+    const stockAguaAntes = stockInicial.get(cAguaPri.clasificacion.id)!;
+
+    let cliente!: Awaited<ReturnType<typeof crearCliente>>;
+    let carga!: Awaited<ReturnType<typeof registrarCarga>>;
+    let compra!: Awaited<ReturnType<typeof registrarCompra>>;
+    let venta!: Awaited<ReturnType<typeof registrarVenta>>;
+    let pago!: Awaited<ReturnType<typeof registrarPago>>;
+    let merma!: Awaited<ReturnType<typeof registrarMerma>>;
+    let mov!: Awaited<ReturnType<typeof registrarMovimientoDinero>>;
+
+    try {
+      Object.defineProperty(globalThis.navigator, 'onLine', { value: false, configurable: true });
+
+      cliente = await crearCliente({
+        nombre: 'Cremería La Esperanza',
+        telefono: '55 8899 1122',
+        ubicacion: 'Pasillo H',
+        plazoDias: 7,
+      });
+      await esperarTick();
+
+      carga = await registrarCarga({
+        fecha: diaLocal(),
+        proveedorId: donAle.id,
+        renglones: [{ clasificacionId: cJitPri.clasificacion.id, cantidad: '10' }],
+      });
+      await esperarTick();
+
+      compra = await registrarCompra({
+        proveedorId: agricola.id,
+        renglones: [{ clasificacionId: cAguaPri.clasificacion.id, cantidad: '6', costo: '520' }],
+        formaPago: 'contado',
+        venceEl: null,
+      });
+      await esperarTick();
+
+      venta = await registrarVenta({
+        renglones: [{ clasificacionId: cJitPri.clasificacion.id, cantidad: '3', precio: cJitPri.clasificacion.precio }],
+        clienteId: cliente.id,
+        formaPago: 'credito',
+        venceEl: sumarDias(diaLocal(), 7),
+        enLinea: false,
+        motivoSinExistencia: null,
+      });
+      await esperarTick();
+
+      pago = await registrarPago({
+        clienteId: cliente.id,
+        monto: '500',
+        metodo: 'transferencia',
+        nota: 'Abono offline inicial',
+        ventaId: venta.id,
+      });
+      await esperarTick();
+
+      merma = await registrarMerma({
+        clasificacionId: cAguaPri.clasificacion.id,
+        cantidad: '1',
+        motivo: 'Producto dañado',
+        nota: 'Caja golpeada',
+        cargaId: null,
+      });
+      await esperarTick();
+
+      mov = await registrarMovimientoDinero({
+        categoria: 'flete',
+        concepto: 'Flete nocturno offline',
+        monto: '450',
+        metodo: 'efectivo',
+        proveedorId: null,
+      });
+
+      const opsPendientes = await db.operaciones.toArray();
+      expect(opsPendientes).toHaveLength(7);
+      expect(opsPendientes.every((op) => op.estado === 'pendiente')).toBe(true);
+      expect(opsPendientes.map((op) => op.tipo)).toEqual([
+        'cliente.crear',
+        'carga',
+        'compra.crear',
+        'venta.crear',
+        'pago.crear',
+        'merma.crear',
+        'movimiento_dinero.crear',
+      ]);
+
+      const stockOffline = await existenciasEfectivas();
+      expect(stockOffline.get(cJitPri.clasificacion.id)!.toString()).toBe(stockJitAntes.plus(7).toString());
+      expect(stockOffline.get(cAguaPri.clasificacion.id)!.toString()).toBe(stockAguaAntes.plus(5).toString());
+    } finally {
+      Object.defineProperty(globalThis.navigator, 'onLine', { value: true, configurable: true });
+    }
+
+    await sincronizar();
+    const opsSincronizadas = await db.operaciones.toArray();
+    expect(opsSincronizadas).toHaveLength(7);
+    expect(opsSincronizadas.every((op) => op.estado === 'sincronizada')).toBe(true);
+
+    const stockPostSync = await existenciasEfectivas();
+    expect(stockPostSync.get(cJitPri.clasificacion.id)!.toString()).toBe(stockJitAntes.plus(7).toString());
+    expect(stockPostSync.get(cAguaPri.clasificacion.id)!.toString()).toBe(stockAguaAntes.plus(5).toString());
+
+    // Idempotencia global: reenviar todas las operaciones no duplica existencias ni pagos.
+    await db.operaciones.toCollection().modify({ estado: 'pendiente', respondidaEn: null });
+    await sincronizar();
+    expect((await db.operaciones.toArray()).every((op) => op.estado === 'sincronizada')).toBe(true);
+    const stockReenvio = await existenciasEfectivas();
+    expect(stockReenvio.get(cJitPri.clasificacion.id)!.toString()).toBe(stockJitAntes.plus(7).toString());
+    expect(stockReenvio.get(cAguaPri.clasificacion.id)!.toString()).toBe(stockAguaAntes.plus(5).toString());
+    expect((await db.ventas.get(venta.id))!.pagado).toBe('500.00');
+
+    // Simular un segundo dispositivo completamente limpio (sin reiniciar el servidor demo).
+    fijarToken(null);
+    await db.delete();
+    await db.open();
+    await entrar('ana');
+
+    expect(await db.clientes.get(cliente.id)).toMatchObject({ nombre: 'Cremería La Esperanza' });
+    expect(await db.cargas.get(carga.id)).toBeDefined();
+    expect((await db.existenciasCarga.toArray()).some((e) => e.cargaId === carga.id)).toBe(true);
+    expect(await db.compras.get(compra.id)).toBeDefined();
+    expect((await db.clasificaciones.get(cAguaPri.clasificacion.id))!.ultimoCosto).toBe('520.00');
+    expect(await db.ventas.get(venta.id)).toMatchObject({
+      clienteId: cliente.id,
+      pagado: '500.00',
+      estado: 'a_credito',
+    });
+    expect(await db.pagos.get(pago.id)).toMatchObject({
+      clienteId: cliente.id,
+      monto: '500.00',
+      nota: 'Abono offline inicial',
+    });
+    expect(await db.movimientosInventario.get(merma.id)).toMatchObject({
+      tipo: 'merma',
+      delta: '-1',
+      motivo: 'Producto dañado',
+    });
+    expect(await db.movimientosDinero.get(mov.id)).toMatchObject({
+      concepto: 'Flete nocturno offline',
+      monto: '450.00',
+      metodo: 'efectivo',
+    });
+
+    const stockSegundoDisp = await existenciasEfectivas();
+    expect(stockSegundoDisp.get(cJitPri.clasificacion.id)!.toString()).toBe(stockJitAntes.plus(7).toString());
+    expect(stockSegundoDisp.get(cAguaPri.clasificacion.id)!.toString()).toBe(stockAguaAntes.plus(5).toString());
+
+    expect(await db.unidades.count()).toBeGreaterThan(0);
+    expect(await db.productos.count()).toBeGreaterThan(0);
+    expect(await db.clasificaciones.count()).toBeGreaterThan(0);
+    expect(await db.existencias.count()).toBeGreaterThan(0);
+    expect(await db.proveedores.count()).toBeGreaterThan(0);
+    expect(await db.liquidaciones.count()).toBeGreaterThan(0);
+    expect(await db.liquidacionRenglones.count()).toBeGreaterThan(0);
+    expect(await db.liquidacionConceptos.count()).toBeGreaterThan(0);
   });
 });

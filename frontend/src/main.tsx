@@ -11,6 +11,8 @@ import { router } from './rutas';
 import './styles/tokens.css';
 import './styles/componentes.css';
 import './styles/layout.css';
+import './styles/rediseno.css';
+import './onboarding/onboarding.css';
 
 // TanStack Query solo para pantallas en línea (decisiones técnicas §6); sin reintentos ante errores del servidor.
 const consultas = new QueryClient({
