@@ -2,11 +2,7 @@ import { expect, type Page } from '@playwright/test';
 
 export async function completarOnboarding(page: Page) {
   const bienvenida = page.getByRole('heading', { name: 'Bienvenido a MiCentralMX' });
-  const onboardingVisible = await bienvenida
-    .waitFor({ state: 'visible', timeout: 5000 })
-    .then(() => true)
-    .catch(() => false);
-  if (!onboardingVisible) return;
+  if (!(await bienvenida.isVisible())) return;
 
   await page.getByRole('button', { name: 'Comenzar' }).click();
   await page.getByRole('button', { name: /Registrar ventas/ }).click();

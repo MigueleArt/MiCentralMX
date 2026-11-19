@@ -15,7 +15,7 @@ interface Almacenamiento {
   setItem(clave: string, valor: string): void;
 }
 
-export const claveOnboarding = (negocioId: string) => `micentralmx:onboarding:v1:${negocioId}`;
+export const claveOnboarding = (negocioId: string) => `micentralmx:onboarding-pwa:v1:${negocioId}`;
 
 export function leerOnboarding(almacenamiento: Almacenamiento, negocioId: string): DatosOnboarding | null {
   try {

@@ -5,7 +5,7 @@ test.describe('E2E · Flujo de Venta Offline y Sincronización PWA (HU-054 a HU-
   test.beforeEach(async ({ page }) => {
     // 1. Iniciar sesión con conexión activa para sincronizar semilla de datos y folios
     await iniciarSesionDemo(page);
-    await expect(page.locator('text=$16,394')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Jitomate Saladette', { exact: false }).first()).toBeVisible({ timeout: 15000 });
   });
 
   test('permite registrar una venta sin conexión a Internet y la sincroniza al reconectar', async ({ page, context }) => {

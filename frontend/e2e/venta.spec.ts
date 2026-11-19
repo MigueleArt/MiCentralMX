@@ -6,7 +6,7 @@ test.describe('E2E · Flujo de Venta Completa (Contado y Crédito)', () => {
     // Iniciar sesión con Dueño
     await iniciarSesionDemo(page);
     // Esperar a que la sincronización inicial de la semilla demo se complete en Dexie
-    await expect(page.locator('text=$16,394')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Jitomate Saladette', { exact: false }).first()).toBeVisible({ timeout: 15000 });
   });
 
   test('registra una venta de contado con selección de producto y cálculo de totales', async ({ page }) => {

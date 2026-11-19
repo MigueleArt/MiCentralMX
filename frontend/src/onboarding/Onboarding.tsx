@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useSesionActiva } from '../auth/SesionContext';
 import { Marca } from '../componentes/Marca';
+import { esPwaInstaladaMovil } from './entorno';
 import { VERSION_TERMINOS, guardarOnboarding, leerOnboarding, type DatosOnboarding } from './estado';
 
 interface Opcion {
@@ -61,6 +62,7 @@ function OpcionObjetivo({ opcion, activa, alCambiar }: { opcion: Opcion; activa:
 export function Onboarding({ children }: { children: ReactNode }) {
   const { sesion } = useSesionActiva();
   const negocioId = sesion.negocio.id;
+  const elegible = sesion.usuario.rolBase === 'dueno' && esPwaInstaladaMovil();
   const [completado, setCompletado] = useState(() => leerOnboarding(window.localStorage, negocioId) !== null);
   const [paso, setPaso] = useState(0);
   const [objetivos, setObjetivos] = useState<string[]>([]);
@@ -80,7 +82,7 @@ export function Onboarding({ children }: { children: ReactNode }) {
     if (!completado) tituloRef.current?.focus();
   }, [paso, completado]);
 
-  if (completado) return children;
+  if (!elegible || completado) return children;
 
   const siguiente = () => {
     setError(null);
