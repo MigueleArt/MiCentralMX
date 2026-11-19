@@ -100,4 +100,42 @@ test.describe('E2E · Mejoras v2.0 (Buscador rápido, Reportes y Abonos)', () =>
     await expect(page.getByRole('button', { name: /Copiar comprobante/i })).toBeVisible();
     await expect(page.locator('section[aria-label="Últimos abonos"]')).toContainText('Juan Pérez');
   });
+
+  test('pagos ofrece buscador, filtros avanzados, resumen por método y detalle interactivo', async ({ page }) => {
+    await page.goto('/pagos');
+    await expect(page.getByRole('heading', { name: 'Pagos', exact: true })).toBeVisible();
+
+    await expect(page.locator('.kpi', { hasText: 'Ingresos' })).toBeVisible();
+    await expect(page.locator('.kpi', { hasText: 'Egresos' })).toBeVisible();
+    await expect(page.locator('.kpi', { hasText: 'Balance neto' })).toBeVisible();
+
+    // Buscador por cliente / folio / concepto
+    const buscador = page.locator('input[type="search"]');
+    await buscador.fill('Doña Lupe');
+    await expect(page.locator('button.pagos-fila', { hasText: 'Abarrotes Doña Lupe' })).toBeVisible();
+    await expect(page.locator('button.pagos-fila', { hasText: 'Agrícola San Juan' })).toHaveCount(0);
+
+    // Limpiar búsqueda y filtrar por método Transferencia
+    await page.getByRole('button', { name: 'Limpiar búsqueda' }).click();
+    await page.getByRole('button', { name: /Filtros/i }).click();
+    const sheetFiltros = page.locator('.sheet');
+    await expect(sheetFiltros).toBeVisible();
+    await sheetFiltros.locator('button.chip:has-text("Transferencia")').click();
+    await sheetFiltros.locator('button.btn-p').click();
+
+    await expect(page.locator('.sheet')).toHaveCount(0);
+    await expect(page.locator('button.pagos-fila', { hasText: 'Agrícola San Juan' })).toBeVisible();
+    await expect(page.locator('button.pagos-fila', { hasText: 'Abarrotes Doña Lupe' })).toHaveCount(0);
+
+    // Limpiar filtros, abrir detalle y validar acciones contextuales
+    await page.getByRole('button', { name: 'Limpiar filtros' }).click();
+    const filaLupe = page.locator('button.pagos-fila', { hasText: 'Abarrotes Doña Lupe' }).first();
+    await expect(filaLupe).toBeVisible();
+    await filaLupe.click();
+
+    const detalle = page.locator('aside[aria-label="Detalle del movimiento"], .sheet');
+    await expect(detalle.getByText('Detalle del movimiento')).toBeVisible();
+    await expect(detalle.getByRole('button', { name: /Copiar comprobante/i })).toBeVisible();
+    await expect(detalle.getByRole('link', { name: /Ver cliente/i })).toBeVisible();
+  });
 });
