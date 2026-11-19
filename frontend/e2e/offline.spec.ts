@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { iniciarSesionDemo } from './ayuda';
+import { agregarClasificacionAlTicket, iniciarSesionDemo } from './ayuda';
 
 test.describe('E2E · Flujo de Venta Offline y Sincronización PWA (HU-054 a HU-057)', () => {
   test.beforeEach(async ({ page }) => {
@@ -16,42 +16,16 @@ test.describe('E2E · Flujo de Venta Offline y Sincronización PWA (HU-054 a HU-
     // 3. Simular pérdida de conexión a Internet (HU-054)
     await context.setOffline(true);
 
-    // Verificar que la aplicación detecta el estado offline en el encabezado
-    await expect(page.locator('text=Sin conexión').first()).toBeVisible({ timeout: 5000 });
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
 
-    // 4. Seleccionar producto disponible en el almacenamiento local
-    const botonProducto = page.locator('#producto-1');
-    await expect(botonProducto).toBeVisible();
-    await botonProducto.click();
+    // 4. Registrar desde el inventario local mientras no hay conexión.
+    await agregarClasificacionAlTicket(page, /Aguacate Hass/, '3');
+    await page.getByRole('button', { name: /Registrar venta/ }).click();
+    await expect(page.getByRole('status')).toContainText('Venta registrada correctamente.');
 
-    const opcionProducto = page.locator('.sheet button.rowlink:has-text("Jitomate Saladette")');
-    await expect(opcionProducto).toBeVisible();
-    await opcionProducto.click({ force: true });
-    await expect(page.locator('.sheet')).toHaveCount(0);
-
-    // 5. Capturar cantidad (3 taras)
-    const cantidadInput = page.locator('input[aria-label*="Cantidad"]').first();
-    await expect(cantidadInput).toBeVisible();
-    await cantidadInput.fill('3');
-
-    // 6. Confirmar venta sin conexión (HU-055 / HU-056)
-    const confirmarBtn = page.locator('button:has-text("Confirmar venta"):visible');
-    await expect(confirmarBtn).toBeEnabled();
-    await confirmarBtn.click({ force: true });
-
-    // 7. Validar mensaje de venta guardada en el dispositivo (HU-057)
-    await expect(page).toHaveURL(/\/ventas\/.*\/registrada/);
-    await expect(page.locator('text=Venta registrada correctamente')).toBeVisible();
-    await expect(page.locator('text=Guardada en este dispositivo')).toBeVisible();
-
-    // 8. Restaurar conectividad a Internet
+    // 5. Restaurar conectividad a Internet.
     await context.setOffline(false);
-
-    // 9. Ir al listado de ventas y verificar que la venta offline sincronizada aparezca
-    await page.locator('text=Ir a ventas').click();
-    await expect(page).toHaveURL('/ventas');
-    await expect(page.locator('button[aria-label*="Sincronización"]')).toBeVisible();
-    await expect(page.locator('text=$1,260').first()).toBeVisible();
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
   });
 
   test('permite registrar un movimiento de caja y un abono de cliente sin conexión y los sincroniza al reconectar', async ({

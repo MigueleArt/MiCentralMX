@@ -23,3 +23,13 @@ export async function iniciarSesionDemo(page: Page) {
   await completarOnboarding(page);
   await expect(page.getByText('Jitomate Saladette', { exact: false }).first()).toBeVisible({ timeout: 15000 });
 }
+
+export async function agregarClasificacionAlTicket(page: Page, producto: RegExp, cantidad: string) {
+  const clasificacion = page.locator('.operacion-producto').filter({ hasText: producto }).first();
+  await expect(clasificacion).toBeVisible();
+  await clasificacion.click();
+  const entradaCantidad = page.locator('.operacion-cantidad input');
+  await expect(entradaCantidad).toBeVisible();
+  await entradaCantidad.fill(cantidad);
+  await page.getByRole('button', { name: /Agregar al ticket/ }).click();
+}
