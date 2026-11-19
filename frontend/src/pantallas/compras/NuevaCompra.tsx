@@ -138,6 +138,7 @@ export default function NuevaCompra() {
                     <b>{base}</b>Producto
                   </label>
                   <ElegirEnLista
+                    buscarSiempre
                     id={`pp-${i}`}
                     titulo="Producto"
                     marcador="Elegir producto"

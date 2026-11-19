@@ -1,5 +1,5 @@
 import type { ProductoVista } from './consultas';
-import { coincide } from '../componentes/Formulario';
+import { coincideTokens } from './buscarProductos';
 
 export type FiltroInventario = 'todos' | 'bajo' | 'sin';
 
@@ -8,7 +8,7 @@ export function buscarInventario(catalogo: ProductoVista[], consulta: string, fi
   return catalogo.map((p) => ({
     ...p,
     clasificaciones: p.clasificaciones.filter((c) =>
-      coincide(`${p.producto.nombre} ${c.clasificacion.nombre}`, consulta) &&
+      coincideTokens(`${p.producto.nombre} ${c.clasificacion.nombre} ${p.unidad.nombre} ${p.unidad.plural}`, consulta) &&
       (filtro === 'todos' || (filtro === 'bajo' ? c.bajo : c.sinExistencia)),
     ),
   })).filter((p) => p.clasificaciones.length > 0);

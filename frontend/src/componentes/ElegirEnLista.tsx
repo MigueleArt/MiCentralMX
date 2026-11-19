@@ -1,7 +1,8 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { coincideTokens } from '../dominio/buscarProductos';
 import { EstadoVacio } from './Estados';
-import { Buscador, coincide } from './Formulario';
+import { Buscador } from './Formulario';
 import { HojaInferior } from './Superpuestos';
 
 export interface OpcionLista {
@@ -40,12 +41,47 @@ export function ElegirEnLista({
 }) {
   const [abierta, setAbierta] = useState(false);
   const [q, setQ] = useState('');
+  const [indiceActivo, setIndiceActivo] = useState(0);
+  const buscadorRef = useRef<HTMLInputElement>(null);
   const elegida = opciones.find((o) => o.valor === valor);
-  const filtradas = opciones.filter((o) => coincide(`${o.texto} ${o.busqueda ?? ''}`, q));
+  const filtradas = opciones.filter((o) => coincideTokens(`${o.texto} ${o.busqueda ?? ''}`, q));
+  const mostrarBuscador = conBusqueda && (buscarSiempre || opciones.length > 3);
+
   const cerrar = () => {
     setAbierta(false);
     setQ('');
+    setIndiceActivo(0);
   };
+
+  useEffect(() => {
+    if (!abierta || !mostrarBuscador) return;
+    const idFrame = requestAnimationFrame(() => buscadorRef.current?.focus());
+    return () => cancelAnimationFrame(idFrame);
+  }, [abierta, mostrarBuscador]);
+
+  const alCambiarBusqueda = (nuevo: string) => {
+    setQ(nuevo);
+    setIndiceActivo(0);
+  };
+
+  const manejarTecla = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (filtradas.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIndiceActivo((i) => (i + 1) % filtradas.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIndiceActivo((i) => (i - 1 + filtradas.length) % filtradas.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const elegidaTeclado = filtradas[indiceActivo] ?? filtradas[0];
+      if (elegidaTeclado) {
+        alElegir(elegidaTeclado.valor);
+        cerrar();
+      }
+    }
+  };
+
   return (
     <>
       <button
@@ -71,14 +107,25 @@ export function ElegirEnLista({
       </button>
       {abierta && (
         <HojaInferior titulo={titulo} alCerrar={cerrar}>
-          {conBusqueda && (buscarSiempre || opciones.length > 6) && <Buscador valor={q} alCambiar={setQ} etiqueta={`Buscar en ${titulo.toLowerCase()}`} marcador="Buscar" />}
+          {mostrarBuscador && (
+            <Buscador
+              valor={q}
+              alCambiar={alCambiarBusqueda}
+              etiqueta={`Buscar en ${titulo.toLowerCase()}`}
+              marcador="Buscar"
+              autoFocus
+              inputRef={buscadorRef}
+              onKeyDown={manejarTecla}
+            />
+          )}
           <div className="card" style={{ overflow: 'hidden' }}>
-            {filtradas.map((o) => (
+            {filtradas.map((o, i) => (
               <button
                 key={o.valor}
                 type="button"
                 className="rowlink"
                 aria-current={o.valor === valor || undefined}
+                style={mostrarBuscador && i === indiceActivo && o.valor !== valor ? { background: 'var(--color-primario-tenue)' } : undefined}
                 onClick={() => {
                   alElegir(o.valor);
                   cerrar();

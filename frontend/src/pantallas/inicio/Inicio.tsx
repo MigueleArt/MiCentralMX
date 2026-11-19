@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
+  ChartColumn,
   ChevronRight,
   ClipboardCheck,
   Scale,
@@ -9,6 +10,7 @@ import {
   PackagePlus,
   Plus,
   Receipt,
+  Search,
   ShoppingCart,
   TriangleAlert,
   Truck,
@@ -22,6 +24,7 @@ import { api } from '../../api/cliente';
 import { useConectividad } from '../../sync/conectividad';
 import { useAlertasInventario } from '../inventario/AlertasConciliacion';
 import { useSesionActiva } from '../../auth/SesionContext';
+import { useAbrirBuscadorProductos } from '../../componentes/BuscadorRapidoProductos';
 import { Esqueleto } from '../../componentes/Estados';
 import { FilaMovimiento } from '../../componentes/FilaMovimiento';
 import { Marca } from '../../componentes/Marca';
@@ -47,6 +50,7 @@ const ACCESOS: Acceso[] = [
   { ruta: '/inventario/nuevo', texto: 'Agregar producto', icono: PackagePlus, permiso: 'catalogo.editar' },
   { ruta: '/compras/nueva', texto: 'Registrar compra', icono: ShoppingCart, permiso: 'compras.crear' },
   { ruta: '/clientes/nuevo', texto: 'Agregar cliente', icono: UserPlus, permiso: 'clientes.crear' },
+  { ruta: '/reportes', texto: 'Reportes', icono: ChartColumn, permiso: 'reportes.ver' },
 ];
 
 function Kpi({ to, etiqueta, valor, detalle, icono: Icono, grande, tono = 'neutro' }: { to?: string; etiqueta: string; valor: string; detalle: string; icono?: LucideIcon; grande?: boolean; tono?: 'neutro' | 'verde' | 'ambar' }) {
@@ -69,6 +73,7 @@ export default function Inicio() {
   const { sesion, puede } = useSesionActiva();
   const formato = useFormato();
   const abrirSync = useAbrirSincronizacion();
+  const abrirBuscador = useAbrirBuscadorProductos();
   const r = useLiveQuery(resumenInicio);
   const { enLinea } = useConectividad();
   // Operaciones de todo el negocio que esperan resolución (solo en línea y con permiso).
@@ -261,6 +266,12 @@ export default function Inicio() {
                 Nueva venta
               </Link>
             )}
+            {puede('inventario.ver') && (
+              <button type="button" className="inicio-buscar-btn" onClick={abrirBuscador}>
+                <Search className="ic" />
+                <span>Buscar producto, precio o existencia…</span>
+              </button>
+            )}
           </div>
           <div className="rejilla-2">
             <Kpi tono="verde" icono={Receipt} to="/ventas" etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ${r.ventas.cantidad === 1 ? 'venta' : 'ventas'}`} />
@@ -333,6 +344,13 @@ export default function Inicio() {
             </Link>
           ))}
         </div>
+        {puede('inventario.ver') && (
+          <button type="button" className="inicio-buscar-btn" onClick={abrirBuscador}>
+            <Search className="ic" />
+            <span>Buscar producto, precio o existencia…</span>
+            {formato === 'pc' && <kbd className="kbd-atajo">Ctrl K</kbd>}
+          </button>
+        )}
         <div className="inicio-resumen">
           <Kpi grande to="/carga" icono={Truck} etiqueta="Carga del día" valor={`${cargaDelDia?.queda.toString() ?? '0'} quedan`} detalle={`Cargado: ${cargaDelDia?.cargado.toString() ?? '0'} · Vendido: ${cargaDelDia?.vendido.toString() ?? '0'}`} />
           <Kpi grande tono="verde" to="/ventas" icono={Receipt} etiqueta="Ventas de hoy" valor={formatoMXN(r.ventas.total)} detalle={`${r.ventas.cantidad} ventas`} />

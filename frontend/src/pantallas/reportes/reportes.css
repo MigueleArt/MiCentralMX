@@ -1,0 +1,249 @@
+.reportes-pagina {
+  max-width: 1080px;
+}
+
+.reportes-print-header {
+  display: none;
+}
+
+.reportes-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reportes-acciones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reportes-nav-periodo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.reportes-nav-centro {
+  text-align: center;
+  min-width: 0;
+  flex: 1;
+}
+
+.reportes-nav-titulo {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.reportes-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reportes-kpi {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.reportes-kpi--verde {
+  background: #eaf5ef;
+  border-color: #bddcca;
+}
+
+.reportes-kpi--ambar {
+  background: #fff8eb;
+  border-color: #ead7b3;
+}
+
+.reportes-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reportes-kpi-valor {
+  font-size: clamp(20px, 2.2vw, 28px);
+  line-height: 1.2;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.reportes-delta {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reportes-delta.sube {
+  background: var(--ok-fondo);
+  color: var(--ok-texto);
+}
+
+.reportes-delta.baja {
+  background: var(--error-fondo);
+  color: var(--error-texto);
+}
+
+.reportes-delta.igual {
+  background: var(--gris-1);
+  color: var(--texto-2);
+}
+
+.reportes-grafica-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reportes-grafica-cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.reportes-leyenda {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--texto-2);
+  font-weight: 600;
+}
+
+.reportes-leyenda-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reportes-punto {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.reportes-grafica-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.reportes-grafica-svg {
+  width: 100%;
+  min-width: 440px;
+  height: 220px;
+  display: block;
+}
+
+.reportes-rejilla-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.reportes-subcard {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 639px) {
+  .reportes-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .reportes-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .reportes-rejilla-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .reportes-print-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 2px solid var(--color-primario);
+  }
+
+  .reportes-pagina {
+    max-width: 100% !important;
+    width: 100% !important;
+    gap: 12px !important;
+  }
+
+  .reportes-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .reportes-kpi {
+    padding: 10px 12px !important;
+  }
+
+  .reportes-kpi-valor {
+    font-size: 18px !important;
+  }
+
+  .reportes-rejilla-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .reportes-grafica-scroll,
+  .tabla-scroll {
+    overflow: visible !important;
+  }
+
+  .reportes-grafica-svg {
+    min-width: 0 !important;
+    width: 100% !important;
+    height: 185px !important;
+  }
+
+  .reportes-pagina .tbl th,
+  .reportes-pagina .tbl td {
+    padding: 6px 8px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap;
+  }
+
+  .card,
+  .reportes-kpi,
+  .reportes-grafica-card,
+  .reportes-subcard,
+  .reportes-pagina tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
