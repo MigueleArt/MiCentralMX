@@ -83,6 +83,7 @@ export const unidades = pgTable('unidades', {
   nombre: text('nombre').notNull(),
   plural: text('plural').notNull(),
   permiteDecimales: boolean('permite_decimales').notNull(),
+  kilogramosPorUnidad: cantidad('kilogramos_por_unidad'),
   archivadoEn: ts('archivado_en'),
   txId: xid8('tx_id'),
 });

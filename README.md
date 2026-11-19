@@ -195,7 +195,7 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 | `backend/.env`, `backend/.env.test`, `.env` | Contraseñas y secretos. Se versionan solo los `.example`. |
 | `node_modules/`, `dist/`, `frontend/dist-demo/` | Se generan con `npm install` y `npm run build`. |
 
-Si se cambia el esquema de la base: **nueva migración** en `database/migraciones/` con el siguiente número (hoy van de `0001` a `0010_liquidacion_merma.sql`, la próxima es `0011_…sql`); nunca se edita una ya aplicada. Se aplica con `npm run db:migrar` en `backend/`. Si la tabla nueva es de un negocio, lleva `negocio_id`, RLS forzado con la política `aislamiento_negocio` y sus permisos para `mc_app`.
+Si se cambia el esquema de la base: **nueva migración** en `database/migraciones/` con el siguiente número; nunca se edita una ya aplicada. Se aplica con `npm run db:migrar` en `backend/`. Si la tabla nueva es de un negocio, lleva `negocio_id`, RLS forzado con la política `aislamiento_negocio` y sus permisos para `mc_app`.
 
 ---
 

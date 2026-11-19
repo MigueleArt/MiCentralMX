@@ -12,7 +12,7 @@ import { Campo, Entrada } from '../../componentes/Formulario';
 import { EstadoSync } from '../../componentes/Sincronizacion';
 import { HojaInferior } from '../../componentes/Superpuestos';
 import type { ConfiguracionNegocio, Negocio, Unidad } from '@micentralmx/shared/entidades';
-import { cambiarContrasena, cambiarPermiteDecimalesUnidad, guardarConfiguracion } from '../../dominio/enLinea';
+import { cambiarContrasena, cambiarKilogramosPorUnidad, cambiarPermiteDecimalesUnidad, guardarConfiguracion } from '../../dominio/enLinea';
 import { useFormato } from '../../hooks/useFormato';
 import { useResumenSync } from '../../hooks/useResumenSync';
 import { useUnidades } from '../../hooks/useDatosLocales';
@@ -123,6 +123,25 @@ function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
     }
   };
 
+  const cambiarEquivalencia = async (u: Unidad, valor: string) => {
+    if (!enLinea) return;
+    const normalizado = valor.trim();
+    if (normalizado && (!/^\d+(\.\d{1,3})?$/.test(normalizado) || Number(normalizado) <= 0)) {
+      setError('La equivalencia debe ser un número mayor que cero.');
+      return;
+    }
+    setActualizando(u.id);
+    setError(null);
+    try {
+      await cambiarKilogramosPorUnidad(u.id, normalizado || null);
+      avisar(`Equivalencia de ${u.nombre} actualizada`);
+    } catch (e) {
+      setError(mensajeError(e));
+    } finally {
+      setActualizando(null);
+    }
+  };
+
   return (
     <HojaInferior titulo="Unidades de medida" alCerrar={alCerrar}>
       <p className="t-aux" style={{ marginBottom: 12 }}>
@@ -151,6 +170,24 @@ function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
               <p className="t-aux" style={{ fontSize: 12 }}>
                 {u.permiteDecimales ? 'Acepta fracciones y decimales' : 'Solo cantidades enteras'}
               </p>
+              <label className="t-aux" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                <span>Equivale a kg:</span>
+                <input
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  inputMode="decimal"
+                  aria-label={`Kilogramos por ${u.nombre}`}
+                  defaultValue={u.kilogramosPorUnidad ?? ''}
+                  placeholder="Sin equivalencia"
+                  disabled={!enLinea || actualizando === u.id}
+                  onBlur={(e) => {
+                    if ((u.kilogramosPorUnidad ?? '') !== e.currentTarget.value) void cambiarEquivalencia(u, e.currentTarget.value);
+                  }}
+                  style={{ width: 110, minHeight: 34, padding: '4px 8px', border: '1px solid var(--borde)', borderRadius: 8, background: 'var(--fondo)' }}
+                />
+                <span>por {u.nombre}</span>
+              </label>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: enLinea ? 'pointer' : 'not-allowed' }}>
               <input

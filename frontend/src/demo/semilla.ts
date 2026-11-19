@@ -80,7 +80,7 @@ export function crearSemilla() {
     ['arpilla', 'arpillas', false],
     ['tara', 'taras', true],
     ['libra', 'libras', true],
-  ].map(([nombre, plural, dec]) => ({ id: nuevoId(), nombre: nombre as string, plural: plural as string, permiteDecimales: dec as boolean, archivadoEn: null }));
+  ].map(([nombre, plural, dec]) => ({ id: nuevoId(), nombre: nombre as string, plural: plural as string, permiteDecimales: dec as boolean, kilogramosPorUnidad: nombre === 'tara' ? '15' : nombre === 'kg' ? '1' : null, archivadoEn: null }));
   const u = (n: string) => unidades.find((x) => x.nombre === n)!;
 
   const productos: Producto[] = [];

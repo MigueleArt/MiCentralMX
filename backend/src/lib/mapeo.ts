@@ -31,6 +31,7 @@ export const unidad = (r: Fila<typeof e.unidades>): Unidad => ({
   nombre: r.nombre,
   plural: r.plural,
   permiteDecimales: r.permiteDecimales,
+  kilogramosPorUnidad: r.kilogramosPorUnidad,
   archivadoEn: iso(r.archivadoEn),
 });
 

@@ -10,6 +10,8 @@ export interface Unidad {
   nombre: string;
   plural: string;
   permiteDecimales: boolean;
+  /** Kilogramos contenidos en una unidad (p. ej. una tara de jitomate). */
+  kilogramosPorUnidad?: string | null;
   archivadoEn: string | null;
 }
 

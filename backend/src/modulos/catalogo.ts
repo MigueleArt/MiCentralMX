@@ -265,11 +265,17 @@ rutasCatalogo.patch(
   '/catalogo/unidades/:id',
   rutaNegocio('configuracion.editar', async ({ tx, usuario, req }) => {
     const id = String(req.params.id);
-    const d = z.object({ permiteDecimales: z.boolean() }).parse(req.body);
+    const d = z.object({
+      permiteDecimales: z.boolean().optional(),
+      kilogramosPorUnidad: z.union([decimal.refine((v) => D(v).gt(0), 'debe ser mayor que cero'), z.null()]).optional(),
+    }).refine((v) => v.permiteDecimales !== undefined || v.kilogramosPorUnidad !== undefined).parse(req.body);
     const [u] = await tx.select().from(unidades).where(eq(unidades.id, id));
     if (!u) throw noEncontrado('La unidad no existe.');
-    await tx.update(unidades).set({ permiteDecimales: d.permiteDecimales }).where(eq(unidades.id, id));
-    await registrarAuditoria(tx, usuario, 'configuracion', `${usuario.nombre} cambió decimales de unidad ${u.nombre} a ${d.permiteDecimales}`, {
+    await tx.update(unidades).set({
+      ...(d.permiteDecimales !== undefined ? { permiteDecimales: d.permiteDecimales } : {}),
+      ...(d.kilogramosPorUnidad !== undefined ? { kilogramosPorUnidad: d.kilogramosPorUnidad } : {}),
+    }).where(eq(unidades.id, id));
+    await registrarAuditoria(tx, usuario, 'configuracion', `${usuario.nombre} actualizó la unidad ${u.nombre}`, {
       tabla: 'unidades',
       registroId: id,
     });

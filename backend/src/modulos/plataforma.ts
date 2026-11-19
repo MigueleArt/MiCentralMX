@@ -14,14 +14,14 @@ import { negocios, roles, unidades, usuarios } from '../db/esquema';
 import { ErrorHttp, conflicto, esUnicidad } from '../http/errores';
 import { asincrona } from '../http/ruta';
 
-export const UNIDADES_INICIALES: Array<[string, string, boolean]> = [
-  ['caja', 'cajas', false],
-  ['kg', 'kg', true],
-  ['pieza', 'piezas', false],
-  ['costal', 'costales', false],
-  ['arpilla', 'arpillas', false],
-  ['tara', 'taras', true],
-  ['libra', 'libras', true],
+export const UNIDADES_INICIALES: Array<[string, string, boolean, string | null]> = [
+  ['caja', 'cajas', false, null],
+  ['kg', 'kg', true, '1'],
+  ['pieza', 'piezas', false, null],
+  ['costal', 'costales', false, null],
+  ['arpilla', 'arpillas', false, null],
+  ['tara', 'taras', true, '15'],
+  ['libra', 'libras', true, null],
 ];
 
 export interface DatosNegocioNuevo {
@@ -49,7 +49,7 @@ export async function crearNegocio(db: Db, d: DatosNegocioNuevo) {
         editable: base !== 'dueno',
       });
     }
-    await tx.insert(unidades).values(UNIDADES_INICIALES.map(([nombre, plural, permiteDecimales]) => ({ id: uuid(), negocioId, nombre, plural, permiteDecimales })));
+    await tx.insert(unidades).values(UNIDADES_INICIALES.map(([nombre, plural, permiteDecimales, kilogramosPorUnidad]) => ({ id: uuid(), negocioId, nombre, plural, permiteDecimales, kilogramosPorUnidad })));
     const duenoId = uuid();
     await tx.insert(usuarios).values({ id: duenoId, negocioId, nombre: d.dueno.nombre, usuario: d.dueno.usuario.toLowerCase(), contrasenaHash: hash, rolId: ids.dueno, activo: true });
     return { negocioId, duenoId, roles: ids };

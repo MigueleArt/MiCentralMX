@@ -114,11 +114,13 @@ export async function asignarCargaRenglon(
   clasificacionId: string,
   cantidad: string,
   cargaIdPreferencia?: string | null,
+  fechaCarga?: string,
 ): Promise<AsignacionRenglon[]> {
   const pedida = D(cantidad);
   if (pedida.lte(0)) return [];
 
-  const abiertas = await cargasAbiertas();
+  const abiertasDelDia = await cargasAbiertas();
+  const abiertas = fechaCarga ? abiertasDelDia.filter((c) => c.carga.fecha === fechaCarga) : abiertasDelDia;
   const conStock = abiertas.filter((c) => (c.existencias.get(clasificacionId) ?? D(0)).gt(0));
 
   if (conStock.length === 0) {
