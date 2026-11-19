@@ -102,3 +102,15 @@ a.card:focus-visible, .seg button:focus-visible, .qty button:focus-visible {
 @media print {
   .card, .btn, .tile, .sheet, .dialog, .nav, .barra-accion { box-shadow: none; }
 }
+
+/* Evita el desbordamiento horizontal del menú lateral. */
+.rail {
+  overflow-x: hidden;
+}
+
+.rail a {
+  max-width: 100%;
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+}

@@ -37,6 +37,7 @@ import { useConectividad } from '../../sync/conectividad';
 import { AltaRapidaCliente } from '../clientes/FormCliente';
 import { InsigniaInventario } from '../../componentes/Insignias';
 import { asignarCargaRenglon } from '../../dominio/consultas';
+import './venta.css';
 
 interface ItemClasificacion {
   cantidad: string;
@@ -281,6 +282,7 @@ export default function NuevaVenta() {
     .map((p) => ({
       valor: p.producto.id,
       texto: p.producto.nombre,
+      busqueda: p.clasificaciones.map((c) => c.clasificacion.nombre).join(' '),
       detalle: `${cantidadConUnidad(p.total.toString(), p.unidad)} en total · por ${p.unidad.nombre}`,
     }));
 
@@ -310,6 +312,7 @@ export default function NuevaVenta() {
         </div>
 
         <ElegirEnLista
+          buscarSiempre
           id={`producto-${bloque.clave}`}
           titulo="Elegir producto"
           marcador="Elegir producto"
@@ -381,7 +384,7 @@ export default function NuevaVenta() {
                   </div>
 
                   {/* Origen de la carga */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, background: 'var(--fondo-elevado)', padding: '6px 10px', borderRadius: 6 }}>
+                  <div className="venta-origen" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, background: 'var(--fondo-elevado)', padding: '6px 10px', borderRadius: 6 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Layers className="ic" style={{ width: 14, height: 14, color: 'var(--primario)' }} />
                       <span>
@@ -433,7 +436,7 @@ export default function NuevaVenta() {
                         placeholder="0"
                         value={item.cantidad}
                         onChange={(e) => actualizarItem(bloque.clave, cid, { cantidad: e.target.value })}
-                        className="entrada num"
+                        className="inp num"
                         style={{
                           width: '100%',
                           fontWeight: 700,
@@ -446,7 +449,7 @@ export default function NuevaVenta() {
 
                     <div>
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 2 }}>
-                        Precio por {p.unidad.nombre}
+                        Precio por {p.unidad.nombre}{puedePrecio ? ' · editable' : ' · catálogo'}
                       </label>
                       <input
                         type="number"
@@ -455,7 +458,7 @@ export default function NuevaVenta() {
                         value={item.precio}
                         readOnly={!puedePrecio}
                         onChange={(e) => actualizarItem(bloque.clave, cid, { precio: e.target.value })}
-                        className="entrada num"
+                        className="inp num"
                         style={{
                           width: '100%',
                           fontWeight: 700,
@@ -617,6 +620,36 @@ export default function NuevaVenta() {
     </div>
   );
 
+  // El resumen usa los mismos renglones y el mismo total del formulario.
+  const resumenVenta = (
+    <section className="venta-resumen" aria-label="Resumen de la venta">
+      <div className="venta-resumen-titulo">
+        <h2 className="t-sec">Resumen de venta</h2>
+        <span className="bdg b-neu">{itemsActivos.length} {itemsActivos.length === 1 ? 'renglón' : 'renglones'}</span>
+      </div>
+      <p className="t-aux">Revisa cantidades y precios antes de confirmar.</p>
+      {itemsActivos.length === 0 && <p className="venta-resumen-vacio t-2">Agrega cantidades para ver el total.</p>}
+      <ul className="venta-resumen-lista">
+        {itemsActivos.map((r, idx) => (
+          <li key={`${r.clasificacionId}-${idx}`} className="venta-resumen-renglon">
+            <div className="venta-resumen-producto">
+              <p className="venta-resumen-nombre">{r.producto.producto.nombre}</p>
+              <span className="venta-resumen-clasificacion">{r.clasificacionNombre}</span>
+              <p className="t-aux num">{cantidadConUnidad(r.cantidad, r.producto.unidad)} × {formatoMXN(r.precio || 0)} por {r.producto.unidad.nombre}</p>
+            </div>
+            <p className="num venta-resumen-importe">{formatoMXN(D(r.precio || 0).times(r.cantidad))}</p>
+          </li>
+        ))}
+      </ul>
+      <dl>
+        <div className="kv"><dt>Cliente</dt><dd>{cliente?.cliente.nombre ?? 'Mostrador'}</dd></div>
+        <div className="kv"><dt>Forma de pago</dt><dd>{formaPago === 'credito' ? 'Crédito' : formaPago === 'transferencia' ? 'Transferencia' : 'Efectivo'}</dd></div>
+        {formaPago === 'credito' && venceEl && <div className="kv"><dt>Vencimiento</dt><dd>{formatoDia(venceEl)}</dd></div>}
+        <div className="venta-resumen-total"><dt>Total de la venta</dt><dd className="num">{formatoMXN(total)}</dd></div>
+      </dl>
+    </section>
+  );
+
   const falloDialogo = falloGuardado && (
     <Dialogo
       titulo="No se pudo guardar en este dispositivo"
@@ -667,7 +700,7 @@ export default function NuevaVenta() {
           volverA="/ventas"
         />
         <main
-          className="pag-main con-enc-sec"
+          className="pag-main con-enc-sec venta-pagina"
           style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 24, alignItems: 'start' }}
         >
           <div className="card" style={{ padding: 24 }}>
@@ -677,36 +710,7 @@ export default function NuevaVenta() {
             className="card"
             style={{ padding: 20, position: 'sticky', top: 88, display: 'flex', flexDirection: 'column', gap: 14 }}
           >
-            <h2 className="t-sec">Resumen</h2>
-            {itemsActivos.length === 0 && <p className="t-2">Agrega cantidades para ver el total.</p>}
-            {itemsActivos.map((r, idx) => (
-              <div key={`${r.clasificacionId}-${idx}`} className="fila-entre" style={{ alignItems: 'flex-start' }}>
-                <div>
-                  <p style={{ fontWeight: 600 }}>{r.producto.producto.nombre}</p>
-                  <p className="t-aux num">
-                    {r.clasificacionNombre} · {cantidadConUnidad(r.cantidad, r.producto.unidad)} × {formatoMXN(r.precio || 0)}
-                  </p>
-                </div>
-                <p className="num" style={{ fontWeight: 700 }}>
-                  {formatoMXN(D(r.precio || 0).times(r.cantidad))}
-                </p>
-              </div>
-            ))}
-            <dl style={{ borderTop: '1px solid var(--gris-1)' }}>
-              <div className="kv">
-                <dt>Cliente</dt>
-                <dd>
-                  {cliente?.cliente.nombre ?? 'Mostrador'} ·{' '}
-                  {formaPago === 'credito' ? 'Crédito' : formaPago === 'transferencia' ? 'Transferencia' : 'Efectivo'}
-                </dd>
-              </div>
-              <div className="kv" style={{ fontSize: 18 }}>
-                <dt>Total</dt>
-                <dd className="num" style={{ fontSize: 24 }}>
-                  {formatoMXN(total)}
-                </dd>
-              </div>
-            </dl>
+            {resumenVenta}
             {bloqueado && (
               <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>
                 <strong>Revisa la cantidad</strong>
@@ -728,9 +732,10 @@ export default function NuevaVenta() {
   return (
     <>
       <EncabezadoSecundario titulo="Nueva venta" cerrar volverA="/ventas" />
-      <main className="pag-main con-enc-sec con-barra">
+      <main className="pag-main con-enc-sec con-barra venta-pagina">
         <div className="contenedor-form" style={{ margin: formato === 'tablet' ? '0 auto' : undefined }}>
           {formulario}
+          <div className="card venta-resumen-movil">{resumenVenta}</div>
         </div>
       </main>
       <div className="barra-accion">

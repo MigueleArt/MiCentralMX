@@ -1,0 +1,21 @@
+.venta-resumen { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.venta-resumen-titulo { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.venta-resumen-lista { display: flex; flex-direction: column; }
+.venta-resumen-renglon { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; padding: 14px 0; border-bottom: 1px solid var(--borde); }
+.venta-resumen-producto { min-width: 0; flex: 1 1 140px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.venta-resumen-nombre { font-weight: 650; overflow-wrap: anywhere; }
+.venta-resumen-clasificacion { padding: 3px 8px; border-radius: 6px; font-size: 13px; font-weight: 600; background: var(--color-primario-suave); color: var(--color-primario-osc); }
+.venta-resumen-importe { font-weight: 700; overflow-wrap: anywhere; max-width: 100%; }
+.venta-resumen .kv { flex-wrap: wrap; }
+.venta-resumen .kv dd { overflow-wrap: anywhere; max-width: 100%; }
+.venta-resumen-total { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 14px; padding: 16px; border-radius: 12px; background: var(--color-primario-suave); color: var(--color-primario-osc); }
+.venta-resumen-total dt { font-weight: 600; }
+.venta-resumen-total dd { font-size: 28px; line-height: 1.25; font-weight: 750; overflow-wrap: anywhere; max-width: 100%; }
+.venta-resumen-vacio { padding: 14px; background: var(--gris-2); border-radius: 10px; }
+.venta-resumen-movil { margin-top: 20px; padding: 16px; }
+.venta-origen { flex-wrap: wrap; gap: 8px; }
+.venta-origen select { max-width: 100%; min-width: 0; }
+@media (max-width: 767px) {
+  .venta-pagina .contenedor-form { min-width: 0; }
+  .venta-resumen-titulo .t-sec { font-size: 18px; }
+}

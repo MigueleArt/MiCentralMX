@@ -24,6 +24,7 @@ export function ElegirEnLista({
   invalido,
   pie,
   conBusqueda = true,
+  buscarSiempre = false,
 }: {
   id: string;
   titulo: string;
@@ -35,6 +36,7 @@ export function ElegirEnLista({
   invalido?: boolean;
   pie?: (cerrar: () => void, busqueda: string) => ReactNode;
   conBusqueda?: boolean;
+  buscarSiempre?: boolean;
 }) {
   const [abierta, setAbierta] = useState(false);
   const [q, setQ] = useState('');
@@ -69,7 +71,7 @@ export function ElegirEnLista({
       </button>
       {abierta && (
         <HojaInferior titulo={titulo} alCerrar={cerrar}>
-          {conBusqueda && opciones.length > 6 && <Buscador valor={q} alCambiar={setQ} etiqueta={`Buscar en ${titulo.toLowerCase()}`} marcador="Buscar" />}
+          {conBusqueda && (buscarSiempre || opciones.length > 6) && <Buscador valor={q} alCambiar={setQ} etiqueta={`Buscar en ${titulo.toLowerCase()}`} marcador="Buscar" />}
           <div className="card" style={{ overflow: 'hidden' }}>
             {filtradas.map((o) => (
               <button
