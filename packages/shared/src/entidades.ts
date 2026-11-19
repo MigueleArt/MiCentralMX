@@ -21,6 +21,8 @@ export interface Producto {
   unidadId: string;
   /** Aviso de inventario bajo, aplicado a cada clasificación. */
   umbralBajo: string;
+  /** Conversión específica del producto; permite que cada caja o tara tenga un peso distinto. */
+  kilogramosPorUnidad?: string | null;
   archivadoEn: string | null;
 }
 

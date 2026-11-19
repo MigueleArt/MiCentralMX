@@ -115,6 +115,10 @@ export default function DetalleProducto() {
               <p className="valor num" style={{ fontSize: 17 }}>{cantidadConUnidad(p.producto.umbralBajo, p.unidad)} o menos</p>
             </div>
           </div>
+          <div className="card kpi">
+            <p className="t-aux">Presentación y peso</p>
+            <p className="valor num">{p.unidad.nombre}{p.producto.kilogramosPorUnidad ? ` · ${p.producto.kilogramosPorUnidad} kg por ${p.unidad.nombre}` : ' · peso por unidad sin configurar'}</p>
+          </div>
           <section className="pila">
             <h2 className="lbl">Clasificaciones y existencias por carga</h2>
             <div className="card" style={{ overflow: 'hidden' }}>

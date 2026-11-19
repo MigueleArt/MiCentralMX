@@ -145,7 +145,7 @@ function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
   return (
     <HojaInferior titulo="Unidades de medida" alCerrar={alCerrar}>
       <p className="t-aux" style={{ marginBottom: 12 }}>
-        Activa o desactiva si una unidad permite vender y registrar fracciones con decimales (solo en línea).
+        Define si una unidad acepta decimales y el peso sugerido al elegirla. El peso final se guarda en cada producto, porque una caja puede variar según la fruta (solo en línea).
       </p>
       {!enLinea && (
         <AvisoLinea tono="warn" icono={<WifiOff className="ic" />}>
@@ -171,7 +171,7 @@ function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
                 {u.permiteDecimales ? 'Acepta fracciones y decimales' : 'Solo cantidades enteras'}
               </p>
               <label className="t-aux" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                <span>Equivale a kg:</span>
+                <span>Sugerencia:</span>
                 <input
                   type="number"
                   min="0.001"
@@ -186,7 +186,7 @@ function UnidadesMedida({ alCerrar }: { alCerrar: () => void }) {
                   }}
                   style={{ width: 110, minHeight: 34, padding: '4px 8px', border: '1px solid var(--borde)', borderRadius: 8, background: 'var(--fondo)' }}
                 />
-                <span>por {u.nombre}</span>
+                <span>kg por {u.nombre}</span>
               </label>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: enLinea ? 'pointer' : 'not-allowed' }}>

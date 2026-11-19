@@ -59,13 +59,14 @@ export default function OperacionDiaria() {
     nombre: c.clasificacion.nombre,
     productoNombre: p.producto.nombre,
     unidad: p.unidad,
+    kilogramosPorUnidad: p.producto.kilogramosPorUnidad ?? null,
     precio: c.clasificacion.precio,
     existenciaCatalogo: c.existencia,
   }))), [catalogo]);
   const datosDia = resumen?.porClasificacion.map((r) => {
     const producto = catalogo?.find((p) => p.clasificaciones.some((c) => c.clasificacion.id === r.clasificacionId));
     const unidad = producto?.unidad;
-    return { ...r, unidad, kilogramosPorUnidad: unidad?.kilogramosPorUnidad ?? null };
+    return { ...r, unidad, kilogramosPorUnidad: producto?.producto.kilogramosPorUnidad ?? null };
   }) ?? [];
   const disponiblePorUnidad = datosDia.reduce((mapa, renglon) => {
     const key = renglon.unidad?.id ?? renglon.unidadPlural;
@@ -89,8 +90,8 @@ export default function OperacionDiaria() {
   const kgQuedan = totalKg('queda');
   const indicadoresKg: Array<[string, Decimal | null]> = [['Kilos cargados', kgCargados], ['Kilos vendidos', kgVendidos], ['Kilos disponibles', kgQuedan]];
   const totalUnidadesCargaKg = renglones.filter((x) => x.clasificacionId && D(x.cantidad || 0).gt(0));
-  const cargaEnKg = totalUnidadesCargaKg.length > 0 && totalUnidadesCargaKg.every((r) => clases.find((c) => c.id === r.clasificacionId)?.unidad.kilogramosPorUnidad)
-    ? sumar(totalUnidadesCargaKg.map((r) => D(r.cantidad).times(clases.find((c) => c.id === r.clasificacionId)?.unidad.kilogramosPorUnidad ?? 0)))
+  const cargaEnKg = totalUnidadesCargaKg.length > 0 && totalUnidadesCargaKg.every((r) => clases.find((c) => c.id === r.clasificacionId)?.kilogramosPorUnidad)
+    ? sumar(totalUnidadesCargaKg.map((r) => D(r.cantidad).times(clases.find((c) => c.id === r.clasificacionId)?.kilogramosPorUnidad ?? 0)))
     : null;
   const totalTicket = sumar(ticket.map((x) => D(x.cantidad).times(x.precio)));
   const puedeCambiarPrecio = puede('ventas.modificar_precio');
@@ -137,7 +138,7 @@ export default function OperacionDiaria() {
         productoNombre: clase.productoNombre,
         clasificacionNombre: clase.nombre,
         unidadPlural: clase.unidad.plural,
-        kilogramosPorUnidad: clase.unidad.kilogramosPorUnidad ?? null,
+        kilogramosPorUnidad: clase.kilogramosPorUnidad,
         precio: precio || clase.precio,
       }];
     });
@@ -260,7 +261,7 @@ export default function OperacionDiaria() {
                 const existencia = datosDia.find((x) => x.clasificacionId === seleccion)?.queda ?? D(0);
                 return <>
                   <h3 className="operacion-titulo">{clase.nombre}</h3>
-                  <div className="operacion-control"><b>Cantidad de {clase.unidad.plural}</b><div className="operacion-cantidad"><button type="button" aria-label="Restar uno" onClick={() => setCantidad((v) => Decimal.max(0, D(v || 0).minus(1)).toString())}><Minus /></button><input type="number" min="0" step={clase.unidad.permiteDecimales ? '0.01' : '1'} value={cantidad} onChange={(e) => setCantidad(e.target.value)} /><button type="button" aria-label="Sumar uno" onClick={() => setCantidad((v) => D(v || 0).plus(1).toString())}><Plus /></button><small>{existencia.toString()} disponibles {clase.unidad.kilogramosPorUnidad ? `· ${kilosDe(existencia.toString(), clase.unidad.kilogramosPorUnidad)} kg` : ''}</small></div></div>
+                  <div className="operacion-control"><b>Cantidad de {clase.unidad.plural}</b><div className="operacion-cantidad"><button type="button" aria-label="Restar uno" onClick={() => setCantidad((v) => Decimal.max(0, D(v || 0).minus(1)).toString())}><Minus /></button><input type="number" min="0" step={clase.unidad.permiteDecimales ? '0.01' : '1'} value={cantidad} onChange={(e) => setCantidad(e.target.value)} /><button type="button" aria-label="Sumar uno" onClick={() => setCantidad((v) => D(v || 0).plus(1).toString())}><Plus /></button><small>{existencia.toString()} disponibles {clase.kilogramosPorUnidad ? `· ${kilosDe(existencia.toString(), clase.kilogramosPorUnidad)} kg` : ''}</small></div></div>
                   <label className="operacion-campo margen-arriba">Precio por {clase.unidad.nombre}{puedeCambiarPrecio ? '' : ' · catálogo'}
                     <input type="number" min="0" step="0.5" value={precio || clase.precio} readOnly={!puedeCambiarPrecio} onChange={(e) => setPrecio(e.target.value)} />
                   </label>

@@ -40,6 +40,7 @@ export const producto = (r: Fila<typeof e.productos>): Producto => ({
   nombre: r.nombre,
   unidadId: r.unidadId,
   umbralBajo: r.umbralBajo,
+  kilogramosPorUnidad: r.kilogramosPorUnidad,
   archivadoEn: iso(r.archivadoEn),
 });
 

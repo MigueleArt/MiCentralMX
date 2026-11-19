@@ -317,6 +317,7 @@ export interface DatosProducto {
   nombre: string;
   unidadId: string;
   umbralBajo: string;
+  kilogramosPorUnidad?: string | null;
   clasificaciones: Array<{ id: string; nombre: string; precio: string; existenciaInicial?: string }>;
 }
 

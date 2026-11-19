@@ -458,7 +458,7 @@ async function guardarProducto(d: DatosProducto, usuario: UsuarioServidor, id?: 
   if (!d.clasificaciones?.length) return error(422, 'Agrega al menos una clasificación.');
   const previo = id ? await obtener<Producto>('productos', id) : undefined;
   if (id && !previo) return error(404, 'El producto no existe.');
-  const producto: Producto = { id: id ?? nuevoId(), nombre: d.nombre.trim(), unidadId: d.unidadId, umbralBajo: D(d.umbralBajo || 0).toString(), archivadoEn: null };
+  const producto: Producto = { id: id ?? nuevoId(), nombre: d.nombre.trim(), unidadId: d.unidadId, umbralBajo: D(d.umbralBajo || 0).toString(), kilogramosPorUnidad: d.kilogramosPorUnidad ?? null, archivadoEn: null };
   await guardar('productos', producto.id, producto);
   const existentes = (await todos<Clasificacion>('clasificaciones')).filter((c) => c.productoId === producto.id);
   for (const [orden, c] of d.clasificaciones.entries()) {

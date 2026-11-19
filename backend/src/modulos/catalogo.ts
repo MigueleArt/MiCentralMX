@@ -17,6 +17,7 @@ const esquemaProducto = z.object({
   nombre: z.string().trim().min(1, 'Escribe el nombre del producto.').max(120),
   unidadId: z.uuid(),
   umbralBajo: decimal,
+  kilogramosPorUnidad: z.union([decimal.refine((v) => D(v).gt(0), 'debe ser mayor que cero'), z.null()]).optional(),
   clasificaciones: z
     .array(z.object({ id: z.uuid(), nombre: z.string().trim().min(1).max(80), precio: decimal, existenciaInicial: decimal.optional() }))
     .min(1, 'Agrega al menos una clasificación.')
@@ -32,7 +33,7 @@ async function guardarProducto({ tx, usuario, req }: Contexto, id: string | null
   if (previo?.archivadoEn) throw invalido('El producto está archivado.');
 
   const productoId = id ?? uuid();
-  const valores = { nombre: d.nombre, unidadId: d.unidadId, umbralBajo: D(d.umbralBajo).toString() };
+  const valores = { nombre: d.nombre, unidadId: d.unidadId, umbralBajo: D(d.umbralBajo).toString(), kilogramosPorUnidad: d.kilogramosPorUnidad ?? null };
   if (previo) await tx.update(productos).set(valores).where(eq(productos.id, productoId));
   else await tx.insert(productos).values({ id: productoId, negocioId: usuario.negocioId, ...valores });
 

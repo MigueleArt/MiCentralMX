@@ -94,6 +94,7 @@ export const productos = pgTable('productos', {
   nombre: text('nombre').notNull(),
   unidadId: uuid('unidad_id').notNull(),
   umbralBajo: cantidad('umbral_bajo').notNull(),
+  kilogramosPorUnidad: cantidad('kilogramos_por_unidad'),
   archivadoEn: ts('archivado_en'),
   txId: xid8('tx_id'),
 });

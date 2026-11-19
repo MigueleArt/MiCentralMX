@@ -40,6 +40,7 @@ export default function FormProducto() {
 
   const [nombre, setNombre] = useState<string | null>(id ? null : '');
   const [unidadId, setUnidadId] = useState<string | null>(null);
+  const [kilogramosPorUnidad, setKilogramosPorUnidad] = useState('');
   const [umbral, setUmbral] = useState('');
   const [clas, setClas] = useState<ClasForm[]>([{ id: nuevoId(), nombre: '', precio: '', existenciaInicial: '', nueva: true }]);
   const [errores, setErrores] = useState<Record<string, string>>({});
@@ -50,6 +51,9 @@ export default function FormProducto() {
   if (id && existente && nombre === null) {
     setNombre(existente.producto.nombre);
     setUnidadId(existente.producto.unidadId);
+    setKilogramosPorUnidad(existente.producto.kilogramosPorUnidad !== undefined
+      ? existente.producto.kilogramosPorUnidad ?? ''
+      : existente.unidad.kilogramosPorUnidad ?? (existente.unidad.nombre === 'kg' ? '1' : ''));
     setUmbral(D(existente.producto.umbralBajo).toString());
     setClas(
       existente.clasificaciones
@@ -76,6 +80,7 @@ export default function FormProducto() {
     if (!nombre.trim()) e.nombre = 'Escribe el nombre del producto.';
     if (!unidadId) e.unidad = 'Elige cómo se vende.';
     if (umbral && !D(umbral).isFinite()) e.umbral = 'Escribe un número.';
+    if (kilogramosPorUnidad && (!D(kilogramosPorUnidad).isFinite() || D(kilogramosPorUnidad).lte(0))) e.kilogramos = 'Indica un peso mayor que cero o deja el campo vacío si no aplica.';
     if (clas.length === 0) e.clas = 'Agrega al menos una clasificación.';
     clas.forEach((c) => {
       if (!c.nombre.trim()) e[`nombre-${c.id}`] = 'Escribe el nombre.';
@@ -95,6 +100,7 @@ export default function FormProducto() {
       nombre: nombre.trim(),
       unidadId: unidadId!,
       umbralBajo: umbral || '0',
+      kilogramosPorUnidad: kilogramosPorUnidad || null,
       clasificaciones: clas.map((c) => ({ id: c.id, nombre: c.nombre.trim(), precio: c.precio, ...(c.nueva && c.existenciaInicial ? { existenciaInicial: c.existenciaInicial } : {}) })),
     };
     try {
@@ -143,9 +149,31 @@ export default function FormProducto() {
               marcador="Elegir"
               valor={unidadId}
               opciones={unidades.filter((u) => !u.archivadoEn).map((u) => ({ valor: u.id, texto: u.nombre.charAt(0).toUpperCase() + u.nombre.slice(1), detalle: u.permiteDecimales ? 'Acepta decimales' : 'Solo cantidades enteras' }))}
-              alElegir={setUnidadId}
+              alElegir={(v) => {
+                setUnidadId(v);
+                const nuevaUnidad = unidades.find((u) => u.id === v);
+                setKilogramosPorUnidad(nuevaUnidad?.kilogramosPorUnidad ?? (nuevaUnidad?.nombre === 'kg' ? '1' : ''));
+              }}
               invalido={!!errores.unidad}
               conBusqueda={false}
+            />
+          </Campo>
+          <Campo
+            etiqueta={unidad ? `Kilogramos por ${unidad.nombre}` : 'Kilogramos por unidad'}
+            id="kg-unidad"
+            error={errores.kilogramos}
+            ayuda="Configura cuánto pesa una caja, tara o presentación de este producto. Déjalo vacío si todavía no lo sabes."
+          >
+            <Entrada
+              id="kg-unidad"
+              type="number"
+              inputMode="decimal"
+              min="0.001"
+              step="0.001"
+              placeholder={unidad?.nombre === 'kg' ? '1' : 'Ej. 15'}
+              value={kilogramosPorUnidad}
+              onChange={(e) => setKilogramosPorUnidad(e.target.value.replace(/[^\d.]/g, ''))}
+              error={errores.kilogramos}
             />
           </Campo>
           <Campo etiqueta="Aviso de inventario bajo" id="lw" error={errores.umbral} ayuda={unidad ? `Se avisa cuando una clasificación tenga ${umbral || '0'} ${unidad.plural} o menos.` : undefined}>
@@ -155,7 +183,7 @@ export default function FormProducto() {
           <section className="pila-12">
             <div>
               <h2 className="lbl">Clasificaciones</h2>
-              <p className="hint">Cada clasificación tiene su propia existencia y precio.</p>
+                  <p className="hint">Cada clasificación tiene su propia existencia y precio. El tipo de empaque y su peso en kg se configuran arriba para este producto.</p>
             </div>
             {errores.clas && <p className="err-msg">{errores.clas}</p>}
             {clas.map((c, i) => {

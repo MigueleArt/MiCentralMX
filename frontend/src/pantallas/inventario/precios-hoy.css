@@ -1,0 +1,16 @@
+.precios-hoy-lista{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;width:100%;min-width:0}
+.precios-hoy-producto{padding:14px;overflow:hidden;min-width:0}
+.precios-hoy-encabezado{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--borde-tenue);min-width:0}
+.precios-hoy-encabezado>p{font-weight:750;font-size:16px;min-width:0;overflow-wrap:anywhere}
+.precios-hoy-encabezado>span{flex:none;white-space:nowrap}
+.precios-hoy-clasificaciones{display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
+.precios-hoy-fila{display:grid;grid-template-columns:minmax(0,1fr) 154px;align-items:center;gap:16px;min-width:0;padding:9px 0;border-bottom:1px solid var(--borde-tenue)}
+.precios-hoy-fila:last-child{border-bottom:0}
+.precios-hoy-detalle{min-width:0}
+.precios-hoy-detalle>p:first-child{font-weight:650;font-size:14px;overflow-wrap:anywhere}
+.precios-hoy-detalle .t-aux{overflow-wrap:anywhere}
+.precios-hoy-input{box-sizing:border-box;display:grid;grid-template-columns:16px minmax(0,1fr);align-items:center;gap:7px;width:154px;min-width:0}
+.precios-hoy-input>span{color:var(--texto-tenue);font-weight:700}
+.precios-hoy-campo{box-sizing:border-box;width:100%;min-width:0;height:48px;padding:0 10px;text-align:right;font-size:16px;font-weight:750;font-variant-numeric:tabular-nums;border:1px solid var(--borde);transition:border-color .14s ease,box-shadow .14s ease}
+.precios-hoy-campo.modificado{border-color:var(--primario);box-shadow:0 0 0 2px color-mix(in srgb,var(--primario) 12%,transparent)}
+@media(max-width:560px){.precios-hoy-producto{padding:12px}.precios-hoy-encabezado{align-items:flex-start;flex-direction:column;gap:3px}.precios-hoy-fila{grid-template-columns:minmax(0,1fr) 120px;gap:9px}.precios-hoy-input{width:120px;grid-template-columns:14px minmax(0,1fr);gap:5px}.precios-hoy-campo{height:46px;padding:0 7px;font-size:16px}}
