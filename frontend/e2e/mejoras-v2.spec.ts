@@ -6,7 +6,7 @@ test.describe('E2E · Mejoras v2.0 (Buscador rápido, Reportes y Abonos)', () =>
     await iniciarSesionDemo(page);
   });
 
-  test('buscador rápido desde Inicio y en Nueva venta agiliza el registro', async ({ page }) => {
+  test('el buscador rápido desde Inicio preselecciona una clasificación para vender', async ({ page }) => {
     // 1. Abrir buscador rápido desde Inicio
     const btnBuscarInicio = page.getByRole('button', { name: /Buscar producto, precio o existencia/i });
     await expect(btnBuscarInicio).toBeVisible();
@@ -24,24 +24,15 @@ test.describe('E2E · Mejoras v2.0 (Buscador rápido, Reportes y Abonos)', () =>
     // 3. Saltar directo a Nueva venta con el producto preseleccionado
     await sheet.getByRole('button', { name: 'Vender' }).first().click();
     await expect(page).toHaveURL(/\/ventas\/nueva\?producto=/);
-    await expect(page.locator('text=Clasificaciones, origen y precios')).toBeVisible();
+    await expect(page.locator('.operacion-seleccion-compacta')).toContainText('Aguacate Hass');
 
-    // 4. Agregar un segundo producto usando el buscador rápido inline de NuevaVenta
-    const buscadorVenta = page.locator('#buscador-rapido-venta');
-    await expect(buscadorVenta).toBeVisible();
-    await buscadorVenta.fill('chile');
-    await expect(page.locator('.venta-buscador-resultados').locator('text=Chile serrano')).toBeVisible();
-    await buscadorVenta.press('Enter');
-
-    const cantidadChile = page.locator('input[aria-label="Cantidad Única"]');
-    await expect(cantidadChile).toBeVisible();
-    await cantidadChile.fill('2');
-
-    // 5. Confirmar venta
-    const confirmarBtn = page.locator('button:has-text("Confirmar venta"):visible');
-    await expect(confirmarBtn).toBeEnabled();
-    await confirmarBtn.click({ force: true });
-    await expect(page).toHaveURL(/\/ventas\/.*\/registrada/);
+    // 4. Completar la venta con la clasificación que eligió el buscador.
+    const cantidad = page.locator('.operacion-cantidad input');
+    await expect(cantidad).toBeVisible();
+    await cantidad.fill('1');
+    await page.getByRole('button', { name: /Agregar al ticket/ }).click();
+    await page.getByRole('button', { name: /Registrar venta/ }).click();
+    await expect(page.getByRole('status')).toContainText('Venta registrada correctamente.');
   });
 
   test('reporte diario, semanal y mensual muestra ventas, ingresos y gráfica', async ({ page }) => {

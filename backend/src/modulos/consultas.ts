@@ -204,7 +204,7 @@ rutasConsultas.get(
         { clave: '17-24', etiqueta: 'Noche' },
       ];
       const idxFranja = (col: string) =>
-        sql.raw(`case when ${hora(col)} < 7 then 0 when ${hora(col)} < 12 then 1 when ${hora(col)} < 17 then 2 else 3 end`);
+        sql`case when ${hora(col)} < 7 then 0 when ${hora(col)} < 12 then 1 when ${hora(col)} < 17 then 2 else 3 end`;
 
       const [rv, rp, rd] = await Promise.all([
         tx.execute<{ idx: number; total: string; contado: string; credito: string; cant: string }>(sql`
