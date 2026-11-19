@@ -1,13 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { iniciarSesionDemo } from './ayuda';
 
 test.describe('E2E · Flujo de Venta Completa (Contado y Crédito)', () => {
   test.beforeEach(async ({ page }) => {
     // Iniciar sesión con Dueño
-    await page.goto('/login');
-    await page.fill('#u', 'rodolfo');
-    await page.fill('#p', 'demo1234');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/');
+    await iniciarSesionDemo(page);
     // Esperar a que la sincronización inicial de la semilla demo se complete en Dexie
     await expect(page.locator('text=$16,394')).toBeVisible({ timeout: 15000 });
   });

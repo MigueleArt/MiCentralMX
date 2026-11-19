@@ -1,13 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { iniciarSesionDemo } from './ayuda';
 
 test.describe('E2E · Flujo de Venta Offline y Sincronización PWA (HU-054 a HU-057)', () => {
   test.beforeEach(async ({ page }) => {
     // 1. Iniciar sesión con conexión activa para sincronizar semilla de datos y folios
-    await page.goto('/login');
-    await page.fill('#u', 'rodolfo');
-    await page.fill('#p', 'demo1234');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/');
+    await iniciarSesionDemo(page);
     await expect(page.locator('text=$16,394')).toBeVisible({ timeout: 15000 });
   });
 

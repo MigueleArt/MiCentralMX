@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { completarOnboarding } from './ayuda';
 
 test.describe('Validación de PWA y Manifiesto', () => {
   test('la aplicación expone el manifiesto web con las propiedades requeridas', async ({ page }) => {
@@ -36,8 +37,15 @@ test.describe('Validación de PWA y Manifiesto', () => {
     await page.fill('#p', 'demo1234');
     await page.click('button[type="submit"]');
 
-    // Verificar navegación al inicio y visualización del botón principal
+    // Verificar navegación al inicio y completar la configuración inicial.
     await expect(page).toHaveURL('/');
+    await expect(page.getByRole('heading', { name: 'Bienvenido a MiCentralMX' })).toBeVisible();
+    await completarOnboarding(page);
+    await expect(page.locator('text=Nueva venta')).toBeVisible();
+
+    // Al recargar, la configuración guardada evita que el tutorial vuelva a aparecer.
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Bienvenido a MiCentralMX' })).toHaveCount(0);
     await expect(page.locator('text=Nueva venta')).toBeVisible();
   });
 });

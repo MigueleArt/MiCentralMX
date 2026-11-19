@@ -9,6 +9,7 @@ import { SincronizacionProvider } from './componentes/Sincronizacion';
 import type { Permiso } from '@micentralmx/shared/permisos';
 import { AppShell } from './layout/AppShell';
 import { iniciarMotor } from './sync/motor';
+import { Onboarding } from './onboarding/Onboarding';
 import Login from './pantallas/Login';
 import Inicio from './pantallas/inicio/Inicio';
 import Mas from './pantallas/mas/Mas';
@@ -62,7 +63,9 @@ function Protegida() {
   if (!sesion) return <Navigate to="/login" replace />;
   return (
     <SincronizacionProvider>
-      <Outlet />
+      <Onboarding>
+        <Outlet />
+      </Onboarding>
     </SincronizacionProvider>
   );
 }
