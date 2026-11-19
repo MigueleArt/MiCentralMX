@@ -242,6 +242,23 @@ export const pagos = pgTable('pagos', {
   txId: xid8('tx_id'),
 });
 
+export const movimientosEnvase = pgTable('movimientos_envase', {
+  id: uuid('id').primaryKey(),
+  negocioId: uuid('negocio_id').notNull(),
+  clienteId: uuid('cliente_id').notNull(),
+  clienteNombre: text('cliente_nombre').notNull(),
+  envase: text('envase').notNull(),
+  tipo: text('tipo').$type<'entrega' | 'devolucion' | 'saldo_inicial' | 'ajuste'>().notNull(),
+  cantidad: numeric('cantidad', { precision: 12, scale: 3 }).notNull(),
+  direccion: text('direccion').$type<'aumenta' | 'reduce' | null>(),
+  nota: text('nota'),
+  ventaId: uuid('venta_id'),
+  usuarioId: uuid('usuario_id').notNull(),
+  usuarioNombre: text('usuario_nombre').notNull(),
+  creadoEnDispositivo: ts('creado_en_dispositivo').notNull(),
+  txId: xid8('tx_id'),
+});
+
 export const pagoAplicaciones = pgTable(
   'pago_aplicaciones',
   {

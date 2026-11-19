@@ -44,6 +44,7 @@ import CargaDelDia from './pantallas/carga/Carga';
 import NuevaCarga from './pantallas/carga/NuevaCarga';
 import DetalleCarga from './pantallas/carga/DetalleCarga';
 import PreciosHoy from './pantallas/inventario/PreciosHoy';
+import Envases from './pantallas/envases/Envases';
 
 /** Rutas con sesión: arranca el motor de sincronización mientras haya sesión. */
 function Protegida() {
@@ -106,6 +107,7 @@ export const router = createBrowserRouter([
           { path: 'ventas/:id', element: <DetalleVenta /> },
           { path: 'ventas/:id/registrada', element: <VentaRegistrada /> },
           { path: 'deudas', element: <Deudas /> },
+          { path: 'envases', element: con('envases.gestionar', <Envases />) },
           { path: 'deudas/:id', element: <DetalleDeuda /> },
           { path: 'deudas/:id/historial', element: <HistorialDeuda /> },
           { path: 'cobrar', element: con('pagos.registrar', <Cobrar />) },

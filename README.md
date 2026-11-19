@@ -123,7 +123,7 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 
 **Trabajo sin conexión**
 - La app guarda primero en el dispositivo (IndexedDB) y luego sincroniza: al abrir la app, al recuperar conexión, cada minuto si hay pendientes y con "Sincronizar ahora". No depende de Background Sync.
-- Funcionan sin Internet: ventas, pagos de clientes, mermas, compras, alta de clientes e ingresos y egresos simples.
+- Funcionan sin Internet: ventas, pagos de clientes, movimientos de cajas/taras por recuperar, mermas, compras, alta de clientes e ingresos y egresos simples.
 - Requieren conexión: productos y precios, ajustes de inventario, cancelaciones, usuarios, configuración, reportes, historial y revisiones.
 - Guardar nunca falla por falta de red. Si algo falla es el almacenamiento del navegador.
 
@@ -145,7 +145,9 @@ Las pruebas del backend borran y recrean la base `micentralmx_prueba` en cada co
 
 **Conciliación nocturna.** A las 03:00 (Ciudad de México), la API compara cada existencia contra la suma de sus movimientos; el historial manda. Si no coinciden, Dueño y Administrador ven un aviso en Inicio y en Inventario, y con "Corregir con el historial" igualan la existencia. Si el conteo físico es otro, después se registra un ajuste. Con varias instancias de la API, solo una la ejecuta. Si se prefiere un cron externo, se usa `npm run tareas:nocturnas` con `TAREAS_NOCTURNAS=false`.
 
-**Bajada de datos.** Va por páginas de 1000 filas. Si se corta a mitad, el dispositivo la retoma sin perder ni repetir cambios. La primera bajada trae 30 días de operaciones más todas las deudas abiertas; lo anterior se consulta en línea.
+**Bajada de datos.** Va por páginas de 1000 filas. Si se corta a mitad, el dispositivo la retoma sin perder ni repetir cambios. La primera bajada trae 30 días de operaciones, todas las deudas abiertas y el historial de envases para calcular saldos; lo anterior se consulta en línea.
+
+**Envases retornables por cliente.** En Más → Cajas por recuperar se registran entregas, devoluciones, saldos iniciales contados y ajustes de cajas/taras. El saldo físico se calcula independientemente de la deuda monetaria; cuando falta conteo inicial, se muestra como pendiente de confirmar. Los movimientos se guardan offline, sincronizan mediante la cola idempotente y pueden relacionarse con una venta.
 
 **Revisiones.** Las operaciones que llegan con observaciones aparecen en Más → Revisiones para Dueño y Administrador. Ejemplos: existencia negativa, pago de más, reloj desfasado, cliente duplicado o un registro que todavía no existe. Desde ahí se **aprueban**, se **reaplican** o se **descartan**, con nota opcional.
 

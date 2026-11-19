@@ -165,6 +165,23 @@ export interface Pago {
   requiereRevision: boolean;
 }
 
+/** Movimiento de envases retornables por cliente; saldo monetario se lleva por separado. */
+export interface MovimientoEnvase {
+  id: string;
+  clienteId: string;
+  clienteNombre: string;
+  envase: string;
+  tipo: 'entrega' | 'devolucion' | 'saldo_inicial' | 'ajuste';
+  /** Cantidad positiva. En ajustes, direccion define si aumenta o reduce el saldo. */
+  cantidad: string;
+  direccion: 'aumenta' | 'reduce' | null;
+  nota: string | null;
+  ventaId: string | null;
+  usuarioId: string;
+  usuarioNombre: string;
+  creadoEnDispositivo: string;
+}
+
 export interface RenglonCompra {
   clasificacionId: string;
   productoId: string;

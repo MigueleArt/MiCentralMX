@@ -24,6 +24,7 @@ import type {
   LiquidacionRenglon,
   LiquidacionConcepto,
   AjusteProductor,
+  MovimientoEnvase,
   ComisionTipo,
   ComisionTipoBase,
   TipoConceptoLiquidacion,
@@ -69,6 +70,8 @@ export interface DatosMerma {
   cargaId?: string | null;
 }
 
+export type DatosMovimientoEnvase = Omit<MovimientoEnvase, 'usuarioId' | 'usuarioNombre'>;
+
 export interface DatosOperacion {
   'venta.crear': Venta;
   'pago.crear': Pago;
@@ -76,6 +79,7 @@ export interface DatosOperacion {
   'merma.crear': DatosMerma;
   'cliente.crear': Cliente;
   'movimiento_dinero.crear': MovimientoDinero;
+  'envase.movimiento': DatosMovimientoEnvase;
   carga: Carga;
   'carga.crear': Carga;
 }
@@ -131,6 +135,7 @@ export interface CambiosPull {
   liquidacionRenglones: LiquidacionRenglon[];
   liquidacionConceptos: LiquidacionConcepto[];
   ajustesProductor: AjusteProductor[];
+  movimientosEnvase: MovimientoEnvase[];
 }
 
 const lista = z.array(z.record(z.string(), z.unknown())).default([]);
@@ -157,6 +162,7 @@ export const esquemaRespuestaPull = z.object({
     liquidacionRenglones: lista,
     liquidacionConceptos: lista,
     ajustesProductor: lista,
+    movimientosEnvase: lista,
   }),
 });
 export interface RespuestaPull {

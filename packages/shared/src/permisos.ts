@@ -26,6 +26,8 @@ export const PERMISOS = {
   'revisiones.resolver': 'Resolver operaciones en revisión',
   'cargas.registrar': 'Registrar cargas del día',
   'cargas.cerrar': 'Cerrar cargas',
+  'envases.gestionar': 'Registrar entregas, devoluciones y saldos de envases',
+  'envases.ajustar': 'Registrar saldos iniciales y ajustes de envases',
   'liquidaciones.ver': 'Consultar liquidaciones y cuentas de productores',
   'liquidaciones.gestionar': 'Emitir liquidaciones y registrar ajustes a productores',
   'configuracion.editar': 'Cambiar la configuración del negocio',
@@ -42,6 +44,6 @@ export const ROLES_BASE: Record<RolBase, { nombre: string; permisos: Permiso[] }
   administrador: { nombre: 'Administrador', permisos: TODOS_LOS_PERMISOS },
   trabajador: {
     nombre: 'Trabajador',
-    permisos: ['ventas.crear', 'pagos.registrar', 'inventario.ver', 'clientes.crear'],
+    permisos: ['ventas.crear', 'pagos.registrar', 'inventario.ver', 'clientes.crear', 'envases.gestionar'],
   },
 };

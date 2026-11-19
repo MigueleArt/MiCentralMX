@@ -144,6 +144,7 @@ async function aplicarCambios(r: RespuestaPull) {
       db.compras,
       db.movimientosInventario,
       db.movimientosDinero,
+      db.movimientosEnvase,
       db.liquidaciones,
       db.liquidacionRenglones,
       db.liquidacionConceptos,
@@ -164,6 +165,7 @@ async function aplicarCambios(r: RespuestaPull) {
       await db.compras.bulkPut(c.compras.map((x) => ({ ...x, operacionId: null })));
       await db.movimientosInventario.bulkPut(c.movimientosInventario.map((x) => ({ ...x, operacionId: null })));
       await db.movimientosDinero.bulkPut(c.movimientosDinero.map((x) => ({ ...x, operacionId: null })));
+      await db.movimientosEnvase.bulkPut(c.movimientosEnvase.map((x) => ({ ...x, operacionId: null })));
       if (c.liquidaciones?.length) await db.liquidaciones.bulkPut(c.liquidaciones);
       if (c.liquidacionRenglones?.length) await db.liquidacionRenglones.bulkPut(c.liquidacionRenglones);
       if (c.liquidacionConceptos?.length) await db.liquidacionConceptos.bulkPut(c.liquidacionConceptos);

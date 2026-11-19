@@ -14,13 +14,13 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { v7 as uuid } from 'uuid';
 import type { z } from 'zod';
 import type { Tx } from '../../db/pool';
-import { cargaRenglones, cargas, clasificaciones, clientes, compraRenglones, compras, movimientosDinero, pagoAplicaciones, pagos, productos, proveedores, unidades, ventaRenglones, ventas } from '../../db/esquema';
+import { cargaRenglones, cargas, clasificaciones, clientes, compraRenglones, compras, movimientosDinero, movimientosEnvase, pagoAplicaciones, pagos, productos, proveedores, unidades, ventaRenglones, ventas } from '../../db/esquema';
 import type { UsuarioActual } from '../../http/ruta';
 import { registrarAuditoria } from '../../lib/auditoria';
 import { aCantidad, aImporte, D, folioCompra, folioVenta, formatoMXN, sumar } from '../../lib/dinero';
 import { moverExistencia } from '../../lib/inventario';
 import { folioDelDispositivo, folioSuelto } from '../dispositivos';
-import { CATEGORIAS, esquemaCarga, esquemaCliente, esquemaCompra, esquemaMerma, esquemaMovimientoDinero, esquemaPago, esquemaVenta } from './esquemas';
+import { CATEGORIAS, esquemaCarga, esquemaCliente, esquemaCompra, esquemaMerma, esquemaMovimientoDinero, esquemaMovimientoEnvase, esquemaPago, esquemaVenta } from './esquemas';
 
 export interface Resultado {
   estado: 'aplicada' | 'en_revision' | 'rechazada';
@@ -429,6 +429,39 @@ async function aplicarMovimientoDinero(tx: Tx, datos: unknown, ctx: ContextoApli
   return resultado(`${concepto} · ${tipo === 'ingreso' ? '+' : '−'}${formatoMXN(m.monto)}`, revision);
 }
 
+async function aplicarMovimientoEnvase(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Promise<Resultado> {
+  const { autor } = ctx;
+  exigirPermiso(autor, 'envases.gestionar', 'registrar movimientos de envases');
+  const m = parsear(esquemaMovimientoEnvase, datos);
+  if (m.tipo === 'saldo_inicial' || m.tipo === 'ajuste') exigirPermiso(autor, 'envases.ajustar', 'registrar saldos iniciales o ajustes de envases');
+  const [cliente] = await tx.select({ id: clientes.id, nombre: clientes.nombre }).from(clientes).where(eq(clientes.id, m.clienteId));
+  if (!cliente) throw new Dependencia('El cliente del movimiento de envases no existe en el servidor.');
+  if (m.ventaId) {
+    const [v] = await tx.select({ id: ventas.id, clienteId: ventas.clienteId }).from(ventas).where(eq(ventas.id, m.ventaId));
+    if (!v) throw new Dependencia('La venta relacionada con el movimiento de envases no existe en el servidor.');
+    if (v.clienteId !== cliente.id) throw new Rechazo('La venta relacionada pertenece a otro cliente.');
+  }
+  await tx.insert(movimientosEnvase).values({
+    id: m.id,
+    negocioId: autor.negocioId,
+    clienteId: cliente.id,
+    clienteNombre: cliente.nombre,
+    envase: m.envase,
+    tipo: m.tipo,
+    cantidad: m.cantidad,
+    direccion: m.direccion,
+    nota: m.nota?.trim() || null,
+    ventaId: m.ventaId,
+    usuarioId: autor.id,
+    usuarioNombre: autor.nombre,
+    creadoEnDispositivo: ctx.creadoEnDispositivo,
+  });
+  const accion = m.tipo === 'entrega' ? 'entregó' : m.tipo === 'devolucion' ? 'recibió de vuelta' : m.tipo === 'saldo_inicial' ? 'registró el saldo inicial de' : 'ajustó';
+  const resumen = `${cliente.nombre} · ${accion} ${m.cantidad} ${m.envase}${Number(m.cantidad) === 1 ? '' : 's'}`;
+  await registrarAuditoria(tx, autor, 'inventario', `${autor.nombre} ${resumen}`, { tabla: 'movimientos_envase', registroId: m.id, fecha: ctx.creadoEnDispositivo });
+  return resultado(resumen, [...ctx.revisionGeneral]);
+}
+
 // ── Carga del día ────────────────────────────────────────────────────────────
 
 async function aplicarCarga(tx: Tx, datos: unknown, ctx: ContextoAplicacion): Promise<Resultado> {
@@ -510,6 +543,7 @@ const APLICADORES: Record<string, (tx: Tx, datos: unknown, ctx: ContextoAplicaci
   'merma.crear': aplicarMerma,
   'cliente.crear': aplicarCliente,
   'movimiento_dinero.crear': aplicarMovimientoDinero,
+  'envase.movimiento': aplicarMovimientoEnvase,
   carga: aplicarCarga,
   'carga.crear': aplicarCarga,
 };
@@ -524,6 +558,7 @@ export function resumenCrudo(tipo: string, datos: unknown): string {
     'merma.crear': 'Merma',
     'cliente.crear': 'Cliente nuevo',
     'movimiento_dinero.crear': 'Movimiento de dinero',
+    'envase.movimiento': 'Movimiento de envases',
     carga: 'Carga',
     'carga.crear': 'Carga',
   };
@@ -546,7 +581,11 @@ export async function aplicarOperacion(tx: Tx, tipo: string, datos: unknown, ctx
     const resumen = resumenCrudo(tipo, datos);
     if (e instanceof Rechazo) return { estado: 'rechazada', aplicada: false, motivo: e.message, resultado: null, resumen };
     if (e instanceof Dependencia) return { estado: 'en_revision', aplicada: false, motivo: e.message, resultado: null, resumen };
-    const codigo = (e as { code?: string; cause?: { code?: string; constraint?: string } }).cause?.code ?? (e as { code?: string }).code;
+    const causa = e as { code?: string; constraint?: string; cause?: { code?: string; constraint?: string } };
+    const codigo = causa.cause?.code ?? causa.code;
+    if (codigo === '23505' && (causa.cause?.constraint ?? causa.constraint) === 'movimientos_envase_saldo_inicial_unico') {
+      return { estado: 'rechazada', aplicada: false, motivo: 'Ya existe un saldo inicial para este cliente y tipo de envase. Registra un ajuste.', resultado: null, resumen };
+    }
     if (codigo === '23505') return { estado: 'rechazada', aplicada: false, motivo: 'El folio o el identificador ya se usó en otra operación.', resultado: null, resumen };
     throw e;
   }
