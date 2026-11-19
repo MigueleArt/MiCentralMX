@@ -47,6 +47,7 @@ export default function OperacionDiaria({ soloVentas = false }: { soloVentas?: b
   const [renglones, setRenglones] = useState<LineaCarga[]>([{ clasificacionId: '', cantidad: '' }]);
   const [cargaNuevaId, setCargaNuevaId] = useState<string | null>(null);
   const [seleccion, setSeleccion] = useState<string | null>(null);
+  const [inventarioExpandido, setInventarioExpandido] = useState(true);
   const [cantidad, setCantidad] = useState('1');
   const [precio, setPrecio] = useState('');
   const [ticket, setTicket] = useState<LineaTicket[]>([]);
@@ -129,9 +130,10 @@ export default function OperacionDiaria({ soloVentas = false }: { soloVentas?: b
     if (producto && clasificacion) {
       setSeleccion(clasificacionId);
       setPrecio(clasificacion.clasificacion.precio);
+      if (soloVentas) setInventarioExpandido(false);
     }
     preseleccionAplicada.current = true;
-  }, [catalogo, params]);
+  }, [catalogo, params, soloVentas]);
 
   if (!catalogo || !proveedores || !clientes || !resumen) {
     return <main className="pag-main"><Esqueleto texto="Preparando operación diaria…" /></main>;
@@ -287,16 +289,23 @@ export default function OperacionDiaria({ soloVentas = false }: { soloVentas?: b
             <div className="operacion-kilos">
               {indicadoresKg.map(([titulo, kg]) => <div className="operacion-kilo" key={titulo}><span>{titulo}</span><strong>{kg === null ? 'Configurar equivalencia' : `${kg.toString()} kg`}</strong></div>)}
             </div>
-            <div className="operacion-productos">
-              {tarjetasVenta.map((x) => (
-                <button type="button" key={x.clasificacionId} className={`operacion-producto ${seleccion === x.clasificacionId ? 'seleccionado' : ''}`} onClick={() => { setSeleccion(x.clasificacionId); setCantidad('1'); setPrecio(x.precio); setError(null); }}>
-                  <span><strong>{x.clasificacionNombre}</strong><small>{x.productoNombre}{x.kilogramosPorUnidad ? ` · ${x.kilogramosPorUnidad} kg por ${x.unidad.nombre}` : ''}{x.origenInventario === 'general' ? ' · inventario' : ''}</small></span>
-                  <span className="operacion-stock"><b>{x.disponible.toString()}</b> {x.unidad.plural}{x.kilogramosPorUnidad && <small>{kilosDe(x.disponible.toString(), x.kilogramosPorUnidad)} kg</small>}</span>
-                  <span className="operacion-mas"><Plus size={22} /></span>
-                </button>
-              ))}
-              {tarjetasVenta.length === 0 && <p className="operacion-vacio">No hay productos con existencia disponible para vender.</p>}
-            </div>
+            {soloVentas && seleccion && !inventarioExpandido ? (
+              <div className="operacion-seleccion-compacta">
+                <span>{tarjetasVenta.find((x) => x.clasificacionId === seleccion)?.productoNombre} · {tarjetasVenta.find((x) => x.clasificacionId === seleccion)?.clasificacionNombre}</span>
+                <button type="button" onClick={() => setInventarioExpandido(true)}>Cambiar producto</button>
+              </div>
+            ) : (
+              <div className="operacion-productos">
+                {tarjetasVenta.map((x) => (
+                  <button type="button" key={x.clasificacionId} className={`operacion-producto ${seleccion === x.clasificacionId ? 'seleccionado' : ''}`} onClick={() => { setSeleccion(x.clasificacionId); setCantidad('1'); setPrecio(x.precio); setError(null); if (soloVentas) setInventarioExpandido(false); }}>
+                    <span><strong>{x.clasificacionNombre}</strong><small>{x.productoNombre}{x.kilogramosPorUnidad ? ` · ${x.kilogramosPorUnidad} kg por ${x.unidad.nombre}` : ''}{x.origenInventario === 'general' ? ' · inventario' : ''}</small></span>
+                    <span className="operacion-stock"><b>{x.disponible.toString()}</b> {x.unidad.plural}{x.kilogramosPorUnidad && <small>{kilosDe(x.disponible.toString(), x.kilogramosPorUnidad)} kg</small>}</span>
+                    <span className="operacion-mas"><Plus size={22} /></span>
+                  </button>
+                ))}
+                {tarjetasVenta.length === 0 && <p className="operacion-vacio">No hay productos con existencia disponible para vender.</p>}
+              </div>
+            )}
           </section>
 
           <div className="operacion-venta-grid">

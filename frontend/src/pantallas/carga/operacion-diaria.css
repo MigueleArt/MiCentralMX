@@ -5,3 +5,29 @@
 @media(max-width:700px){.operacion-diaria{padding:16px 14px 90px}.operacion-panel{padding:17px;border-radius:17px}.operacion-meta,.operacion-venta-grid{grid-template-columns:1fr}.operacion-renglon{grid-template-columns:minmax(0,1fr) 104px 42px;gap:7px;padding:10px}.operacion-icono{width:42px}.operacion-renglon .operacion-campo{font-size:12px}.operacion-renglon .operacion-campo input,.operacion-renglon .operacion-campo select{height:50px;padding:0 9px;font-size:14px}.operacion-kilos{gap:7px}.operacion-kilo{padding:10px}.operacion-kilo strong{font-size:17px}.operacion-productos{grid-template-columns:1fr}.operacion-producto{min-height:125px}.operacion-pasos{gap:8px}.operacion-paso{padding:11px 10px;font-size:13px;gap:8px}.operacion-cantidad{gap:8px}.operacion-cantidad small{font-size:11px}}
 .operacion-links{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
 .operacion-paso{border:0;text-align:left;font:inherit;cursor:pointer}.operacion-paso:disabled{opacity:.58;cursor:not-allowed}
+/* Compacta la selección de producto para mantener visibles los controles de venta. */
+.operacion-producto{min-height:108px;padding:13px 48px 13px 14px;gap:9px}
+.operacion-producto strong{font-size:16px;line-height:1.2}
+.operacion-producto small{font-size:11px;line-height:1.25}
+.operacion-mas{width:34px;height:34px;right:10px;bottom:10px}
+.operacion-kilo{padding:10px 12px}
+.operacion-kilo strong{font-size:18px}
+.operacion-seleccion-compacta{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--borde,#dce6e1);border-radius:12px;background:#f5f8f6;font-size:13px;font-weight:700}
+.operacion-seleccion-compacta span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.operacion-seleccion-compacta button{flex:none;min-height:38px;padding:0 11px;border:0;border-radius:9px;background:#e4f2eb;color:#176b50;font:inherit;font-weight:750}
+@media(max-width:700px){
+  .operacion-diaria{padding-top:10px}
+  .operacion-panel{padding:14px;margin-bottom:11px}
+  .operacion-kilos{gap:6px;margin-bottom:11px}
+  .operacion-kilo{padding:8px}
+  .operacion-kilo span{font-size:10px;line-height:1.2}
+  .operacion-kilo strong{font-size:15px;line-height:1.2;overflow-wrap:anywhere}
+  .operacion-productos{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .operacion-producto{min-height:96px;padding:10px 39px 10px 10px;gap:6px;border-radius:13px}
+  .operacion-producto strong{font-size:13px}
+  .operacion-producto small{font-size:10px}
+  .operacion-stock b{font-size:18px}
+  .operacion-stock{font-size:11px}
+  .operacion-mas{width:29px;height:29px;right:7px;bottom:7px;border-radius:9px}
+  .operacion-venta-grid{gap:10px}
+}
