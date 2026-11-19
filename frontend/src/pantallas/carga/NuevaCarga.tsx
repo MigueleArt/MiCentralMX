@@ -65,6 +65,13 @@ export default function NuevaCarga() {
       cantidad: cant.trim(),
     }));
 
+  const totalesPorUnidad = renglonesValidos.reduce((totales, renglon) => {
+    const unidad = catalogo
+      .flatMap((producto) => producto.clasificaciones.map((clasificacion) => ({ producto, clasificacion })))
+      .find(({ clasificacion }) => clasificacion.clasificacion.id === renglon.clasificacionId)?.producto.unidad;
+    if (unidad) totales.set(unidad.id, { unidad, cantidad: (totales.get(unidad.id)?.cantidad ?? D(0)).plus(renglon.cantidad) });
+    return totales;
+  }, new Map<string, { unidad: (typeof catalogo)[number]['unidad']; cantidad: ReturnType<typeof D> }>());
   const totalUnidades = sumar(renglonesValidos.map((r) => r.cantidad));
   const visibles = buscarInventario(catalogo, q, 'todos');
 
@@ -234,7 +241,7 @@ export default function NuevaCarga() {
                     <span className="t-aux">Unidad: {prod.unidad.nombre}</span>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
                     {prod.clasificaciones.map((c) => {
                       const cid = c.clasificacion.id;
                       const val = cantidades[cid] ?? '';
@@ -246,17 +253,20 @@ export default function NuevaCarga() {
                             alignItems: 'center',
                             justifyContent: 'space-between',
                             gap: 12,
-                            padding: '6px 0',
-                            borderBottom: '1px solid var(--borde-tenue)',
+                            padding: 12,
+                            minHeight: 94,
+                            border: '1px solid var(--borde-tenue)',
+                            borderRadius: 10,
+                            background: val ? 'var(--primario-fondo)' : 'var(--fondo-elevado)',
                           }}
                         >
                           <div style={{ flex: 1 }}>
                             <p style={{ fontWeight: 600, fontSize: 14 }}>{c.clasificacion.nombre}</p>
                             <p className="t-aux" style={{ fontSize: 12 }}>
-                              Existencia actual: {c.existencia.toString()} {prod.unidad.plural}
+                              Disponible ahora: {c.existencia.toString()} {prod.unidad.plural}
                             </p>
                           </div>
-                          <div style={{ width: 110, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <div style={{ width: 112, display: 'flex', alignItems: 'center', gap: 4 }}>
                             <input
                               type="number"
                               step={prod.unidad.permiteDecimales ? '0.01' : '1'}
@@ -265,7 +275,8 @@ export default function NuevaCarga() {
                               value={val}
                               onChange={(e) => cambiarCantidad(cid, e.target.value)}
                               className="entrada num"
-                              style={{ textAlign: 'right', fontWeight: 600, fontSize: 16 }}
+                              aria-label={`Cantidad de ${c.clasificacion.nombre} en ${prod.producto.nombre}`}
+                              style={{ textAlign: 'center', fontWeight: 700, fontSize: 22, minHeight: 54, padding: 8 }}
                             />
                           </div>
                         </div>
@@ -280,11 +291,16 @@ export default function NuevaCarga() {
 
           {/* Resumen inferior */}
           {totalUnidades.gt(0) && (
-            <div className="card" style={{ padding: 14, background: 'var(--primario-fondo)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, color: 'var(--primario)' }}>Total en esta carga:</span>
-              <span className="num" style={{ fontWeight: 700, fontSize: 18, color: 'var(--primario)' }}>
-                {totalUnidades.toString()} unidades
-              </span>
+            <div className="card pila-12" style={{ padding: 16, background: 'var(--primario-fondo)' }}>
+              <span style={{ fontWeight: 700, color: 'var(--primario)' }}>Resumen de la carga</span>
+              <div className="fila" style={{ flexWrap: 'wrap', gap: 12 }}>
+                {[...totalesPorUnidad.values()].map(({ unidad, cantidad }) => (
+                  <span key={unidad.id} className="num" style={{ fontSize: 20, fontWeight: 800, color: 'var(--primario)' }}>
+                    {cantidad.toString()} {unidad.plural}
+                  </span>
+                ))}
+              </div>
+              <span className="t-aux">El sistema suma cada unidad por separado; el peso en kg requiere configurar una equivalencia por producto.</span>
             </div>
           )}
 

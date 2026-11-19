@@ -12,6 +12,7 @@ import type {
   LiquidacionConcepto,
   LiquidacionRenglon,
   MovimientoDinero,
+  MovimientoEnvase,
   MovimientoInventario,
   Negocio,
   Pago,
@@ -32,6 +33,7 @@ export type PagoLocal = Local<Pago>;
 export type CompraLocal = Local<Compra>;
 export type MovimientoInventarioLocal = Local<MovimientoInventario>;
 export type MovimientoDineroLocal = Local<MovimientoDinero>;
+export type MovimientoEnvaseLocal = Local<MovimientoEnvase>;
 export type ClienteLocal = Local<Cliente>;
 
 /** Estados de una operación en la cola local (propuesta §7.2). */
@@ -116,6 +118,7 @@ export class BaseLocal extends Dexie {
   liquidacionRenglones!: EntityTable<LiquidacionRenglon, any>;
   liquidacionConceptos!: EntityTable<LiquidacionConcepto, any>;
   ajustesProductor!: EntityTable<AjusteProductor, 'id'>;
+  movimientosEnvase!: EntityTable<MovimientoEnvaseLocal, 'id'>;
   operaciones!: EntityTable<OperacionLocal, 'operacionId'>;
   bloquesFolio!: EntityTable<BloqueFolioLocal, 'id'>;
 
@@ -169,6 +172,10 @@ export class BaseLocal extends Dexie {
       ajustesProductor: '&id, proveedorId, tipo, categoria, creadoEn',
       movimientosDinero: '&id, creadoEn, operacionId, proveedorId, categoria',
     });
+
+    this.version(4).stores({
+      movimientosEnvase: '&id, clienteId, envase, tipo, creadoEnDispositivo, operacionId',
+    });
   }
 
   async leerMeta<K extends ClaveMeta>(clave: K): Promise<Metadatos[K] | undefined> {
@@ -204,6 +211,7 @@ export class BaseLocal extends Dexie {
       this.liquidacionRenglones,
       this.liquidacionConceptos,
       this.ajustesProductor,
+      this.movimientosEnvase,
       this.operaciones,
       this.bloquesFolio,
     ];

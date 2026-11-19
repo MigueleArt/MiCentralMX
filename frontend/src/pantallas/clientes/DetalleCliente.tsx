@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CircleCheck, Copy, HandCoins, Pencil, Phone, Plus, TriangleAlert } from 'lucide-react';
+import { Boxes, CircleCheck, Copy, HandCoins, Pencil, Phone, Plus, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useSesionActiva } from '../../auth/SesionContext';
@@ -232,6 +232,12 @@ export default function DetalleCliente() {
                 <Link className="btn btn-p" style={{ flex: 1 }} to="/ventas/nueva">
                   <Plus className="ic" />
                   Nueva venta
+                </Link>
+              )}
+              {puede('envases.gestionar') && (
+                <Link className="btn btn-q" to={`/envases?cliente=${c.cliente.id}`}>
+                  <Boxes className="ic" />
+                  Cajas / taras
                 </Link>
               )}
             </div>

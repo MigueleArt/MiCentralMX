@@ -43,8 +43,10 @@ import Configuracion from './pantallas/configuracion/Configuracion';
 import Revisiones from './pantallas/revisiones/Revisiones';
 import CargaDelDia from './pantallas/carga/Carga';
 import NuevaCarga from './pantallas/carga/NuevaCarga';
+import OperacionDiaria from './pantallas/carga/OperacionDiaria';
 import DetalleCarga from './pantallas/carga/DetalleCarga';
 import PreciosHoy from './pantallas/inventario/PreciosHoy';
+import Envases from './pantallas/envases/Envases';
 
 /** Rutas con sesión: arranca el motor de sincronización mientras haya sesión. */
 function Protegida() {
@@ -109,11 +111,13 @@ export const router = createBrowserRouter([
           { path: 'ventas/:id', element: <DetalleVenta /> },
           { path: 'ventas/:id/registrada', element: <VentaRegistrada /> },
           { path: 'deudas', element: <Deudas /> },
+          { path: 'envases', element: con('envases.gestionar', <Envases />) },
           { path: 'deudas/:id', element: <DetalleDeuda /> },
           { path: 'deudas/:id/historial', element: <HistorialDeuda /> },
           { path: 'cobrar', element: con('pagos.registrar', <Cobrar />) },
           { path: 'carga', element: <CargaDelDia /> },
-          { path: 'carga/nueva', element: con('cargas.registrar', <NuevaCarga />) },
+          { path: 'carga/nueva', element: conCualquiera(['cargas.registrar', 'ventas.crear'], <OperacionDiaria />) },
+          { path: 'carga/registro', element: con('cargas.registrar', <NuevaCarga />) },
           { path: 'carga/:id', element: <DetalleCarga /> },
           { path: 'inventario', element: con('inventario.ver', <Inventario />) },
           { path: 'inventario/precios', element: con('catalogo.editar_precios', <PreciosHoy />) },

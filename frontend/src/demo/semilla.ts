@@ -80,7 +80,7 @@ export function crearSemilla() {
     ['arpilla', 'arpillas', false],
     ['tara', 'taras', true],
     ['libra', 'libras', true],
-  ].map(([nombre, plural, dec]) => ({ id: nuevoId(), nombre: nombre as string, plural: plural as string, permiteDecimales: dec as boolean, archivadoEn: null }));
+  ].map(([nombre, plural, dec]) => ({ id: nuevoId(), nombre: nombre as string, plural: plural as string, permiteDecimales: dec as boolean, kilogramosPorUnidad: nombre === 'tara' ? '15' : nombre === 'kg' ? '1' : null, archivadoEn: null }));
   const u = (n: string) => unidades.find((x) => x.nombre === n)!;
 
   const productos: Producto[] = [];
@@ -88,7 +88,7 @@ export function crearSemilla() {
   const existencias: Array<{ clasificacionId: string; cantidad: string }> = [];
   const clas: Record<string, Clasificacion> = {};
   const agregar = (nombre: string, unidad: string, umbral: string, filas: Array<[string, string, number, string]>) => {
-    const p: Producto = { id: nuevoId(), nombre, unidadId: u(unidad).id, umbralBajo: umbral, archivadoEn: null };
+    const p: Producto = { id: nuevoId(), nombre, unidadId: u(unidad).id, umbralBajo: umbral, kilogramosPorUnidad: u(unidad).kilogramosPorUnidad ?? (unidad === 'kg' ? '1' : null), archivadoEn: null };
     productos.push(p);
     filas.forEach(([cn, precio, existencia, costo], orden) => {
       const c: Clasificacion = { id: nuevoId(), productoId: p.id, nombre: cn, precio, ultimoCosto: costo, orden, archivadoEn: null };

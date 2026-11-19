@@ -11,6 +11,7 @@ import { useAvisos } from '../../componentes/Avisos';
 import { D, formatoMXN } from '../../lib/dinero';
 import { editarPrecios } from '../../dominio/enLinea';
 import { mensajeError } from '../../api/cliente';
+import './precios-hoy.css';
 
 export default function PreciosHoy() {
   const navegar = useNavigate();
@@ -121,57 +122,43 @@ export default function PreciosHoy() {
               }
             />
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="precios-hoy-lista">
               {visibles.map((prod) => (
-                <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid var(--borde-tenue)', paddingBottom: 6 }}>
-                  <p style={{ fontWeight: 700, fontSize: 16 }}>{prod.producto.nombre}</p>
+                <div key={prod.producto.id} className="card precios-hoy-producto">
+                <div className="precios-hoy-encabezado">
+                  <p>{prod.producto.nombre}</p>
                   <span className="t-aux">Vendido por {prod.unidad.nombre}</span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="precios-hoy-clasificaciones">
                   {prod.clasificaciones.map((c) => {
                     const cid = c.clasificacion.id;
                     const precioActual = precios[cid] ?? c.clasificacion.precio;
                     const modificado = !D(precioActual || 0).eq(c.clasificacion.precio);
 
                     return (
-                      <div
-                        key={cid}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          padding: '6px 0',
-                          borderBottom: '1px solid var(--borde-tenue)',
-                        }}
-                      >
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontWeight: 600, fontSize: 14 }}>{c.clasificacion.nombre}</p>
+                      <div key={cid} className="precios-hoy-fila">
+                        <div className="precios-hoy-detalle">
+                          <p>{c.clasificacion.nombre}</p>
                           <p className="t-aux" style={{ fontSize: 12 }}>
                             Precio anterior: {formatoMXN(c.clasificacion.precio)}
                             {c.clasificacion.ultimoCosto && ` · Costo: ${formatoMXN(c.clasificacion.ultimoCosto)}`}
                           </p>
                         </div>
 
-                        <div style={{ width: 130, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ color: 'var(--texto-tenue)', fontWeight: 600 }}>$</span>
+                        <label className="precios-hoy-input">
+                          <span>$</span>
                           <input
                             type="number"
                             step="0.50"
                             min="0"
+                            inputMode="decimal"
                             value={precioActual}
                             onChange={(e) => cambiarPrecio(cid, e.target.value)}
-                            className="entrada num"
-                            style={{
-                              textAlign: 'right',
-                              fontWeight: 700,
-                              fontSize: 16,
-                              borderColor: modificado ? 'var(--primario)' : undefined,
-                            }}
+                            className={`entrada num precios-hoy-campo${modificado ? ' modificado' : ''}`}
+                            aria-label={`Precio de ${prod.producto.nombre}, ${c.clasificacion.nombre}`}
                           />
-                        </div>
+                        </label>
                       </div>
                     );
                   })}

@@ -47,6 +47,8 @@ export const editarPrecios = (precios: Array<{ clasificacionId: string; precio: 
 
 export const cambiarPermiteDecimalesUnidad = (id: string, permiteDecimales: boolean) =>
   yRefrescar(api<any>('PATCH', `/catalogo/unidades/${id}`, { permiteDecimales }));
+export const cambiarKilogramosPorUnidad = (id: string, kilogramosPorUnidad: string | null) =>
+  yRefrescar(api<any>('PATCH', `/catalogo/unidades/${id}`, { kilogramosPorUnidad }));
 
 export interface DatosUsuario {
   nombre: string;

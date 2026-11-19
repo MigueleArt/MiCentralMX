@@ -161,6 +161,13 @@ const FUENTES: Fuente[] = [
     inicial: (limite) => gte(t.ajustesProductor.creadoEn, limite),
     mapear: async (_tx, f: (typeof t.ajustesProductor.$inferSelect)[]) => f.map(mapa.ajusteProductor),
   }),
+  fuente({
+    nombre: 'movimientosEnvase',
+    tabla: t.movimientosEnvase,
+    clave: t.movimientosEnvase.id,
+    tx: t.movimientosEnvase.txId,
+    mapear: async (_tx, f: (typeof t.movimientosEnvase.$inferSelect)[]) => f.map(mapa.movimientoEnvase),
+  }),
 ];
 
 const vacio = (): CambiosPull => ({
@@ -181,6 +188,7 @@ const vacio = (): CambiosPull => ({
   liquidacionRenglones: [],
   liquidacionConceptos: [],
   ajustesProductor: [],
+  movimientosEnvase: [],
 });
 
 export async function bajarPagina(tx: Tx, cursor: string, tamano = config.tamanoPaginaBajada): Promise<{ cambios: CambiosPull; cursor: string; hayMas: boolean }> {

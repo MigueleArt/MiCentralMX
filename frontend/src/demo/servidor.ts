@@ -458,7 +458,7 @@ async function guardarProducto(d: DatosProducto, usuario: UsuarioServidor, id?: 
   if (!d.clasificaciones?.length) return error(422, 'Agrega al menos una clasificación.');
   const previo = id ? await obtener<Producto>('productos', id) : undefined;
   if (id && !previo) return error(404, 'El producto no existe.');
-  const producto: Producto = { id: id ?? nuevoId(), nombre: d.nombre.trim(), unidadId: d.unidadId, umbralBajo: D(d.umbralBajo || 0).toString(), archivadoEn: null };
+  const producto: Producto = { id: id ?? nuevoId(), nombre: d.nombre.trim(), unidadId: d.unidadId, umbralBajo: D(d.umbralBajo || 0).toString(), kilogramosPorUnidad: d.kilogramosPorUnidad ?? null, archivadoEn: null };
   await guardar('productos', producto.id, producto);
   const existentes = (await todos<Clasificacion>('clasificaciones')).filter((c) => c.productoId === producto.id);
   for (const [orden, c] of d.clasificaciones.entries()) {
@@ -697,12 +697,14 @@ ruta('PATCH', '/catalogo/precios', async ({ cuerpo, usuario }) => {
 ruta('PATCH', '/catalogo/unidades/:id', async ({ cuerpo, usuario, params }) => {
   const e = exigir(usuario, await permisos(usuario), 'configuracion.editar');
   if (e) return e;
-  const u = await obtener<{ id: string; nombre: string; plural: string; permiteDecimales: boolean; archivadoEn: string | null }>('unidades', params[0]);
+  const u = await obtener<{ id: string; nombre: string; plural: string; permiteDecimales: boolean; kilogramosPorUnidad?: string | null; archivadoEn: string | null }>('unidades', params[0]);
   if (!u) return error(404, 'La unidad no existe.');
   const permiteDecimales = Boolean(cuerpo.permiteDecimales);
-  await guardar('unidades', u.id, { ...u, permiteDecimales });
+  const kgValor = cuerpo.kilogramosPorUnidad;
+  const kilogramosPorUnidad = kgValor === undefined ? u.kilogramosPorUnidad ?? null : kgValor === null ? null : D(kgValor).toString();
+  await guardar('unidades', u.id, { ...u, permiteDecimales, kilogramosPorUnidad });
   await auditar(usuario.nombre, 'configuracion', `${usuario.nombre} ${permiteDecimales ? 'activó' : 'desactivó'} decimales para la unidad ${u.nombre}`);
-  return ok({ ...u, permiteDecimales });
+  return ok({ ...u, permiteDecimales, kilogramosPorUnidad });
 });
 
 ruta('POST', '/cargas/:id/cerrar', async ({ cuerpo, usuario, params }) => {

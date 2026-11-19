@@ -11,7 +11,7 @@ import { cantidadConUnidad } from '../../dominio/formato';
 import { useFormato } from '../../hooks/useFormato';
 import { useCatalogo } from '../../hooks/useDatosLocales';
 import { EncabezadoPagina } from '../../layout/Encabezados';
-import { formatoMXN } from '../../lib/dinero';
+import { formatoMXN, sumar } from '../../lib/dinero';
 import Decimal from 'decimal.js';
 import { AlertasConciliacion } from './AlertasConciliacion';
 
@@ -40,11 +40,20 @@ export default function Inventario() {
 
   const bajos = catalogo.filter((p) => p.clasificaciones.some((c) => c.bajo)).length;
   const sin = catalogo.filter((p) => p.clasificaciones.some((c) => c.sinExistencia)).length;
+  const productosConKg = catalogo.filter((p) => p.producto.kilogramosPorUnidad);
+  const totalKg = sumar(productosConKg.flatMap((p) => p.clasificaciones.map((c) => c.existencia.times(p.producto.kilogramosPorUnidad!))));
+  const hayProductosSinPeso = catalogo.some((p) => !p.producto.kilogramosPorUnidad && p.clasificaciones.some((c) => c.existencia.gt(0)));
   const lista = buscarInventario(catalogo, q, filtro);
   const existencia = (p: ProductoVista, e: Decimal) => cantidadConUnidad(e.toString(), p.unidad);
 
   const acciones = (
     <>
+      {puede('ventas.crear') && (
+        <Link className="btn btn-p" to="/ventas/nueva">
+          <ShoppingCart className="ic" />
+          Venta rápida
+        </Link>
+      )}
       {puede('catalogo.editar_precios') && (
         <Link className="btn btn-s" to="/inventario/precios">
           <DollarSign className="ic" />
@@ -92,7 +101,7 @@ export default function Inventario() {
               <h3 style={{ fontSize: 16, fontWeight: 600 }}>{p.producto.nombre}</h3>
             </Link>
             {p.clasificaciones.map((c) => (
-              <div key={c.clasificacion.id} className="fila" style={{ padding: '8px 14px', borderTop: '1px solid var(--gris-1)' }}>
+              <div key={c.clasificacion.id} className="fila" style={{ padding: '8px 14px', borderTop: '1px solid var(--gris-1)', gap: 8 }}>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 15 }}>{c.clasificacion.nombre}</span>
                 <span className="num" style={{ width: 92, textAlign: 'right', fontWeight: 600, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                   {existencia(p, c.existencia)}
@@ -101,6 +110,11 @@ export default function Inventario() {
                 <span className="num" style={{ width: 64, textAlign: 'right' }}>
                   {formatoMXN(c.clasificacion.precio)}
                 </span>
+                {puede('ventas.crear') && c.existencia.gt(0) && (
+                  <Link className="btn btn-p btn-sm" to={`/ventas/nueva?clasificacion=${c.clasificacion.id}`} aria-label={`Vender ${p.producto.nombre}, ${c.clasificacion.nombre}`} style={{ minHeight: 40, padding: '0 9px' }}>
+                    Vender
+                  </Link>
+                )}
               </div>
             ))}
           </article>
@@ -146,6 +160,12 @@ export default function Inventario() {
                     </td>
                     <td className="r">
                       <div className="fila" style={{ justifyContent: 'flex-end' }}>
+                        {puede('ventas.crear') && c.existencia.gt(0) && (
+                          <Link className="btn btn-p btn-sm" to={`/ventas/nueva?clasificacion=${c.clasificacion.id}`}>
+                            <ShoppingCart className="ic" />
+                            Vender
+                          </Link>
+                        )}
                         {(c.bajo || c.sinExistencia) && puede('compras.crear') && (
                           <Link className="btn btn-s btn-sm" to={`/compras/nueva?clasificacion=${c.clasificacion.id}`}>
                             <ShoppingCart className="ic" />
@@ -186,6 +206,16 @@ export default function Inventario() {
           <Buscador valor={q} alCambiar={setQ} etiqueta="Buscar producto" marcador="Buscar producto o clasificación…" />
           <p className="t-aux">Busca por nombre o clasificación, por ejemplo: jitomate o primera.</p>
         </div>
+        {totalKg.gt(0) && (
+          <section className="card fila-entre" aria-label="Total disponible en kilogramos" style={{ padding: 16, background: 'var(--primario-fondo)', gap: 12 }}>
+            <div>
+              <p className="t-aux" style={{ color: 'var(--primario)' }}>{hayProductosSinPeso ? 'Peso estimado (presentaciones configuradas)' : 'Peso total disponible estimado'}</p>
+              <p className="num" style={{ color: 'var(--primario)', fontSize: 26, fontWeight: 800 }}>{totalKg.toString()} kg</p>
+              {hayProductosSinPeso && <p className="t-aux">Configura los kg por unidad en los productos restantes para incluirlos.</p>}
+            </div>
+            <Package className="ic" style={{ width: 28, height: 28, color: 'var(--primario)' }} />
+          </section>
+        )}
         <Chips<Filtro>
           etiqueta="Filtrar inventario"
           valor={filtro}

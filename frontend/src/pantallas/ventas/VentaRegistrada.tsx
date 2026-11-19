@@ -1,5 +1,6 @@
-import { CircleCheck, CloudUpload, Plus } from 'lucide-react';
+import { Boxes, CircleCheck, CloudUpload, Plus } from 'lucide-react';
 import { Link, useLocation, useParams } from 'react-router';
+import { useSesionActiva } from '../../auth/SesionContext';
 import { AvisoLinea, Esqueleto } from '../../componentes/Estados';
 import { cantidadConUnidad, ETIQUETA_FORMA_PAGO } from '../../dominio/formato';
 import { useVenta } from '../../hooks/useDatosLocales';
@@ -8,6 +9,7 @@ import { formatoDia, formatoHora } from '../../lib/fechas';
 
 /** Pantalla 08 · Venta registrada. */
 export default function VentaRegistrada() {
+  const { puede } = useSesionActiva();
   const { id } = useParams();
   const { state } = useLocation() as { state?: { sinConexion?: boolean } };
   const v = useVenta(id);
@@ -84,6 +86,12 @@ export default function VentaRegistrada() {
             <Plus className="ic" />
             Nueva venta
           </Link>
+          {venta.clienteId && puede('envases.gestionar') && (
+            <Link className="btn btn-s" to={`/envases?cliente=${venta.clienteId}&venta=${venta.id}`} replace>
+              <Boxes className="ic" />
+              Registrar cajas / taras entregadas
+            </Link>
+          )}
           <div className="rejilla-2">
             <Link className="btn btn-q" to={`/ventas/${venta.id}`} replace>
               Ver detalle
