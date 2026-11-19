@@ -11,7 +11,7 @@ import { cantidadConUnidad } from '../../dominio/formato';
 import { useFormato } from '../../hooks/useFormato';
 import { useCatalogo } from '../../hooks/useDatosLocales';
 import { EncabezadoPagina } from '../../layout/Encabezados';
-import { formatoMXN } from '../../lib/dinero';
+import { formatoMXN, sumar } from '../../lib/dinero';
 import Decimal from 'decimal.js';
 import { AlertasConciliacion } from './AlertasConciliacion';
 
@@ -40,6 +40,7 @@ export default function Inventario() {
 
   const bajos = catalogo.filter((p) => p.clasificaciones.some((c) => c.bajo)).length;
   const sin = catalogo.filter((p) => p.clasificaciones.some((c) => c.sinExistencia)).length;
+  const totalKg = sumar(catalogo.filter((p) => p.unidad.nombre.toLowerCase() === 'kg').flatMap((p) => p.clasificaciones.map((c) => c.existencia)));
   const lista = buscarInventario(catalogo, q, filtro);
   const existencia = (p: ProductoVista, e: Decimal) => cantidadConUnidad(e.toString(), p.unidad);
 
@@ -186,6 +187,15 @@ export default function Inventario() {
           <Buscador valor={q} alCambiar={setQ} etiqueta="Buscar producto" marcador="Buscar producto o clasificación…" />
           <p className="t-aux">Busca por nombre o clasificación, por ejemplo: jitomate o primera.</p>
         </div>
+        {totalKg.gt(0) && (
+          <section className="card fila-entre" aria-label="Total disponible en kilogramos" style={{ padding: 16, background: 'var(--primario-fondo)', gap: 12 }}>
+            <div>
+              <p className="t-aux" style={{ color: 'var(--primario)' }}>Disponible por kilogramo</p>
+              <p className="num" style={{ color: 'var(--primario)', fontSize: 26, fontWeight: 800 }}>{totalKg.toString()} kg</p>
+            </div>
+            <Package className="ic" style={{ width: 28, height: 28, color: 'var(--primario)' }} />
+          </section>
+        )}
         <Chips<Filtro>
           etiqueta="Filtrar inventario"
           valor={filtro}

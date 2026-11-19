@@ -6,6 +6,7 @@ import {
   CreditCard,
   DatabaseZap,
   LoaderCircle,
+  Minus,
   Package,
   Plus,
   Search,
@@ -286,6 +287,11 @@ export default function NuevaVenta() {
     );
   };
 
+  const sumarCantidad = (bloqueClave: number, clasificacionId: string, actual: string, ajuste: number) => {
+    const siguiente = D(actual || 0).plus(ajuste);
+    actualizarItem(bloqueClave, clasificacionId, { cantidad: Decimal.max(0, siguiente).toString() });
+  };
+
   const agregarBloque = () => {
     const clave = Math.max(...bloques.map((b) => b.clave), 0) + 1;
     setBloques([...bloques, nuevoBloque(clave)]);
@@ -529,7 +535,11 @@ export default function NuevaVenta() {
                       <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 2 }}>
                         Cantidad ({p.unidad.plural})
                       </label>
-                      <input
+                      <div style={{ display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr) 48px', gap: 6 }}>
+                        <button type="button" className="btn btn-q" aria-label={`Restar una unidad de ${c.clasificacion.nombre}`} style={{ minHeight: 54, padding: 8 }} onClick={() => sumarCantidad(bloque.clave, cid, item.cantidad, -1)}>
+                          <Minus className="ic" />
+                        </button>
+                        <input
                         type="number"
                         data-cantidad-key={`${bloque.clave}:${cid}`}
                         aria-label={`Cantidad ${c.clasificacion.nombre}`}
@@ -542,11 +552,22 @@ export default function NuevaVenta() {
                         style={{
                           width: '100%',
                           fontWeight: 700,
-                          fontSize: 16,
+                          fontSize: 22,
+                          minHeight: 54,
+                          padding: 8,
                           textAlign: 'right',
                           borderColor: falta && bloqueado ? 'var(--error)' : undefined,
                         }}
-                      />
+                        />
+                        <button type="button" className="btn btn-q" aria-label={`Sumar una unidad de ${c.clasificacion.nombre}`} style={{ minHeight: 54, padding: 8, fontSize: 20, fontWeight: 800 }} onClick={() => sumarCantidad(bloque.clave, cid, item.cantidad, 1)}>
+                          +
+                        </button>
+                      </div>
+                      <div className="fila" style={{ gap: 6, marginTop: 6 }}>
+                        {[1, 5].map((n) => (
+                          <button key={n} type="button" className="btn btn-q btn-sm" style={{ flex: 1, minHeight: 40 }} onClick={() => sumarCantidad(bloque.clave, cid, item.cantidad, n)}>+{n}</button>
+                        ))}
+                      </div>
                     </div>
 
                     <div>
