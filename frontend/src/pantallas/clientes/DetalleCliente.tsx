@@ -43,9 +43,13 @@ export default function DetalleCliente() {
     ]);
     const pagosValidos = pagos.filter((p) => sincronizacionDe(porId, p.operacionId) !== 'rechazada');
     const totalAbonado = sumar(pagosValidos.map((p) => p.monto));
+    const ventasCliente = ventas.filter((v) => v.venta.clienteId === id);
+    const ventasValidas = ventasCliente.filter((v) => v.estado !== 'cancelada');
+    const totalComprado = sumar(ventasValidas.map((v) => v.venta.total));
+    const saldoVencido = sumar(c.deudasAbiertas.filter((d) => d.deuda === 'vencida').map((d) => d.saldo));
+    const saldoProximo = sumar(c.deudasAbiertas.filter((d) => d.deuda === 'proxima').map((d) => d.saldo));
     const movimientos = [
-      ...ventas
-        .filter((v) => v.venta.clienteId === id)
+      ...ventasCliente
         .map((v) => ({
           id: v.venta.id,
           fecha: v.venta.creadoEnDispositivo,
@@ -72,7 +76,7 @@ export default function DetalleCliente() {
         esAbono: true,
       })),
     ].sort((a, b) => b.fecha.localeCompare(a.fecha));
-    return { c, movimientos, totalAbonado };
+    return { c, movimientos, totalAbonado, totalComprado, saldoVencido, saldoProximo, numeroCompras: ventasValidas.length };
   }, [id]);
 
   if (datos === undefined) {
@@ -93,7 +97,7 @@ export default function DetalleCliente() {
       </>
     );
   }
-  const { c, movimientos, totalAbonado } = datos;
+  const { c, movimientos, totalAbonado, totalComprado, saldoVencido, saldoProximo, numeroCompras } = datos;
   const vencida = c.deudasAbiertas.find((d) => d.deuda === 'vencida');
 
   const copiarComprobante = async () => {
@@ -184,20 +188,24 @@ export default function DetalleCliente() {
               </div>
             </div>
 
-            <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, padding: '10px 12px', background: 'var(--fondo-tabla)' }}>
-              <div>
-                <p className="t-aux">Deudas abiertas</p>
-                <p className="num" style={{ fontWeight: 700 }}>{c.deudasAbiertas.length}</p>
+            <dl className="cliente-metricas" aria-label="Resumen financiero del cliente">
+              <div className={`cliente-metrica${saldoVencido.gt(0) ? ' peligro' : ''}`}>
+                <dt>Saldo vencido</dt>
+                <dd className="num">{formatoMXN(saldoVencido)}</dd>
               </div>
-              <div>
-                <p className="t-aux">Total abonado</p>
-                <p className="num" style={{ fontWeight: 700, color: 'var(--ok-texto)' }}>{formatoMXN(totalAbonado)}</p>
+              <div className="cliente-metrica">
+                <dt>Próximo a vencer</dt>
+                <dd className="num">{formatoMXN(saldoProximo)}</dd>
               </div>
-              <div>
-                <p className="t-aux">Por pagar</p>
-                <p className="num" style={{ fontWeight: 700 }}>{formatoMXN(c.saldo)}</p>
+              <div className="cliente-metrica">
+                <dt>Total abonado</dt>
+                <dd className="num" style={{ color: 'var(--ok-texto)' }}>{formatoMXN(totalAbonado)}</dd>
               </div>
-            </div>
+              <div className="cliente-metrica">
+                <dt>Deudas abiertas</dt>
+                <dd className="num">{c.deudasAbiertas.length}</dd>
+              </div>
+            </dl>
 
             {c.deudasAbiertas.length > 0 && (
               <p className="t-2 num" style={{ color: vencida ? 'var(--error-texto)' : undefined, fontWeight: 600 }}>
@@ -231,6 +239,18 @@ export default function DetalleCliente() {
 
           <dl className="card" style={{ padding: '4px 16px' }}>
             <div className="kv">
+              <dt>Compras registradas</dt>
+              <dd>{numeroCompras}</dd>
+            </div>
+            <div className="kv">
+              <dt>Total comprado</dt>
+              <dd className="num">{formatoMXN(totalComprado)}</dd>
+            </div>
+            <div className="kv">
+              <dt>Última compra</dt>
+              <dd>{c.ultimaCompra ? formatoRelativo(c.ultimaCompra) : 'Sin compras'}</dd>
+            </div>
+            <div className="kv">
               <dt>Teléfono</dt>
               <dd>
                 {c.cliente.telefono ? (
@@ -244,7 +264,7 @@ export default function DetalleCliente() {
               </dd>
             </div>
             <div className="kv">
-              <dt>Negocio</dt>
+              <dt>Ubicación o referencia</dt>
               <dd>{c.cliente.ubicacion ?? '—'}</dd>
             </div>
             {c.cliente.plazoDias && (

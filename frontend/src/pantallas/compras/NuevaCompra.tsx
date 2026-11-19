@@ -15,6 +15,7 @@ import { EncabezadoSecundario } from '../../layout/Encabezados';
 import { D, formatoMXN, sumar } from '../../lib/dinero';
 import { diaLocal, formatoDia, sumarDias, textoDias } from '../../lib/fechas';
 import { useConectividad } from '../../sync/conectividad';
+import './compras.css';
 
 interface Renglon {
   clave: number;
@@ -64,6 +65,7 @@ export default function NuevaCompra() {
   const actualizar = (clave: number, cambio: Partial<Renglon>) => setRenglones(renglones.map((r) => (r.clave === clave ? { ...r, ...cambio } : r)));
   const completos = renglones.filter((r) => r.clasificacionId && D(r.cantidad || 0).gt(0));
   const total = sumar(completos.map((r) => D(r.costo || 0).times(r.cantidad)));
+  const proveedorSeleccionado = proveedores.find((p) => p.id === proveedorId);
 
   const confirmar = async () => {
     setErrores({});
@@ -93,7 +95,12 @@ export default function NuevaCompra() {
       <EncabezadoSecundario titulo="Nueva compra" cerrar volverA="/compras" />
       <main className="pag-main con-enc-sec con-barra">
         <div className="pila-16 contenedor-form" style={{ margin: '0 auto', gap: 20 }}>
-          <section className="pila">
+          <div className="card compra-form-estado" aria-label="Avance de la compra">
+            <span className={`bdg ${proveedorSeleccionado ? 'b-ok' : 'b-neu'}`}>{proveedorSeleccionado ? `Proveedor: ${proveedorSeleccionado.nombre}` : 'Falta proveedor'}</span>
+            <span className={`bdg ${completos.length === renglones.length ? 'b-ok' : 'b-neu'}`}>{completos.length} de {renglones.length} partidas completas</span>
+            <span className="bdg b-info">{formaPago === 'credito' ? 'Compra a crédito' : 'Pago de contado'}</span>
+          </div>
+          <section className="card pila compra-form-paso">
             <label className="step" htmlFor="pv">
               <b>{paso++}</b>Proveedor
             </label>
@@ -124,7 +131,7 @@ export default function NuevaCompra() {
             const base = paso;
             if (i === renglones.length - 1) paso += 4;
             return (
-              <div key={r.clave} className={renglones.length > 1 ? 'card pila-16' : 'pila-16'} style={renglones.length > 1 ? { padding: 14, gap: 20 } : { gap: 20 }}>
+              <div key={r.clave} className="card pila-16 compra-form-paso">
                 {renglones.length > 1 && (
                   <div className="fila-entre">
                     <p className="lbl">Producto {i + 1}</p>
@@ -189,6 +196,10 @@ export default function NuevaCompra() {
                       <EntradaImporte id={`cp-${i}`} grande valor={r.costo} alCambiar={(v) => actualizar(r.clave, { costo: v })} placeholder="0" error={errores[`costo-${i}`]} />
                       {errores[`costo-${i}`] && <p className="err-msg">{errores[`costo-${i}`]}</p>}
                     </div>
+                    <div className="compra-form-subtotal">
+                      <span>Subtotal de la partida</span>
+                      <strong className="num">{formatoMXN(D(r.cantidad || 0).times(r.costo || 0))}</strong>
+                    </div>
                     {D(r.cantidad || 0).gt(0) && (
                       <p className="t-2 num" style={{ fontWeight: 600 }}>
                         La existencia de {c.clasificacion.nombre} pasará de {c.existencia.toString()} a {cantidadConUnidad(c.existencia.plus(r.cantidad).toString(), p.unidad)}.
@@ -210,7 +221,7 @@ export default function NuevaCompra() {
             Agregar otro producto
           </button>
 
-          <section className="pila">
+          <section className="card pila compra-form-paso">
             <p className="step">
               <b>{paso}</b>Forma de pago
             </p>
@@ -246,7 +257,7 @@ export default function NuevaCompra() {
             {formatoMXN(total)}
           </p>
         </div>
-        <button type="button" className="btn btn-p btn-lg" style={{ flex: 1.3 }} disabled={guardando || soloLectura || completos.length === 0} onClick={() => void confirmar()}>
+        <button type="button" className="btn btn-p btn-lg" style={{ flex: 1.3 }} disabled={guardando || soloLectura || !proveedorId || completos.length !== renglones.length || (formaPago === 'credito' && !venceEl)} onClick={() => void confirmar()}>
           {guardando ? <LoaderCircle className="ic girar" /> : <Check className="ic" />}
           Confirmar compra
         </button>
