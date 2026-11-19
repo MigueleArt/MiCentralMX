@@ -134,4 +134,57 @@ test.describe('E2E · Mejoras v2.0 (Buscador rápido, Reportes y Abonos)', () =>
     await expect(detalle.getByRole('button', { name: /Copiar comprobante/i })).toBeVisible();
     await expect(detalle.getByRole('link', { name: /Ver cliente/i })).toBeVisible();
   });
+
+  test('barra lateral de escritorio no desborda horizontalmente y mantiene accesible el botón contraer/expandir', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', 'La barra lateral de PC solo aplica en escritorio.');
+    await page.setViewportSize({ width: 1366, height: 768 });
+
+    const side = page.locator('aside.side');
+    const sideNav = side.locator('nav.side-nav');
+    const btnContraer = side.getByRole('button', { name: 'Contraer menú' });
+    await expect(side).toBeVisible();
+    await expect(sideNav).toBeVisible();
+    await expect(btnContraer).toBeVisible();
+
+    const sinDesbordeExpandida = await side.evaluate((el) => {
+      const nav = el.querySelector('nav.side-nav');
+      return el.scrollWidth <= el.clientWidth && (!nav || nav.scrollWidth <= nav.clientWidth);
+    });
+    expect(sinDesbordeExpandida).toBe(true);
+
+    const boxSide = (await side.boundingBox())!;
+    const boxBtnContraer = (await btnContraer.boundingBox())!;
+    expect(boxBtnContraer.x).toBeGreaterThanOrEqual(boxSide.x);
+    expect(boxBtnContraer.x + boxBtnContraer.width).toBeLessThanOrEqual(boxSide.x + boxSide.width);
+
+    await btnContraer.click();
+    const sideContraida = page.locator('aside.side.contraida');
+    const btnExpandir = sideContraida.getByRole('button', { name: 'Expandir menú' });
+    await expect(sideContraida).toBeVisible();
+    await expect(btnExpandir).toBeVisible();
+
+    const sinDesbordeContraida = await sideContraida.evaluate((el) => {
+      const nav = el.querySelector('nav.side-nav');
+      return el.scrollWidth <= el.clientWidth && (!nav || nav.scrollWidth <= nav.clientWidth);
+    });
+    expect(sinDesbordeContraida).toBe(true);
+
+    const boxSideCol = (await sideContraida.boundingBox())!;
+    const boxBtnExpandir = (await btnExpandir.boundingBox())!;
+    expect(boxBtnExpandir.x).toBeGreaterThanOrEqual(boxSideCol.x);
+    expect(boxBtnExpandir.x + boxBtnExpandir.width).toBeLessThanOrEqual(boxSideCol.x + boxSideCol.width);
+
+    const badge = sideContraida.locator('.side-badge').first();
+    if (await badge.isVisible()) {
+      const boxBadge = (await badge.boundingBox())!;
+      expect(boxBadge.x).toBeGreaterThanOrEqual(boxSideCol.x);
+      expect(boxBadge.x + boxBadge.width).toBeLessThanOrEqual(boxSideCol.x + boxSideCol.width);
+    }
+
+    await btnExpandir.click();
+    await expect(page.locator('aside.side.contraida')).toHaveCount(0);
+    await expect(btnContraer).toBeVisible();
+  });
 });

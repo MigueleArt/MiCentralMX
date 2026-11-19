@@ -86,7 +86,7 @@ function BarraLateral({ alAbrirBuscador }: { alAbrirBuscador: () => void }) {
       <d.icono className="ic" />
       {!contraida && d.texto}
       {d.vencidas && vencidas > 0 && (
-        <span className="bdg b-err bdg-sm" style={{ marginLeft: 'auto' }}>
+        <span className="bdg b-err bdg-sm side-badge">
           {vencidas}
         </span>
       )}
@@ -94,13 +94,19 @@ function BarraLateral({ alAbrirBuscador }: { alAbrirBuscador: () => void }) {
   );
   return (
     <aside className={`side${contraida ? ' contraida' : ''}`} aria-label="Navegación">
-      <div className="fila-entre" style={{ padding: '4px 4px 16px 8px' }}>
-        {contraida ? <Logotipo tamano={32} /> : <Marca tamano={32} texto={19} />}
-        <button type="button" className="icon-btn" aria-label={contraida ? 'Expandir menú' : 'Contraer menú'} onClick={() => setContraida(!contraida)} style={{ color: 'var(--texto-2)' }}>
+      <div className="side-enc">
+        {contraida ? <Logotipo tamano={32} /> : <Marca tamano={30} texto={18} />}
+        <button
+          type="button"
+          className="icon-btn side-toggle"
+          aria-label={contraida ? 'Expandir menú' : 'Contraer menú'}
+          title={contraida ? 'Expandir menú' : 'Contraer menú'}
+          onClick={() => setContraida(!contraida)}
+        >
           {contraida ? <ChevronsRight className="ic" /> : <ChevronsLeft className="ic" />}
         </button>
       </div>
-      <nav className="pila" style={{ gap: 2 }}>
+      <nav className="pila side-nav" style={{ gap: 2 }}>
         {puede('inventario.ver') && (
           <button
             type="button"
@@ -121,7 +127,7 @@ function BarraLateral({ alAbrirBuscador }: { alAbrirBuscador: () => void }) {
         {admin.length > 0 && !contraida && <p className="grp">ADMINISTRACIÓN</p>}
         {admin.map(enlace)}
       </nav>
-      <div className="pie">
+      <div className="pie" title={contraida ? `${sesion.usuario.nombre} · ${sesion.usuario.rolNombre}` : undefined}>
         <span className="avatar" style={{ width: 36, height: 36 }}>
           {iniciales(sesion.usuario.nombre)}
         </span>
