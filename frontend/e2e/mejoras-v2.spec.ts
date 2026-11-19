@@ -1,0 +1,181 @@
+import { test, expect } from '@playwright/test';
+import { iniciarSesionDemo } from './ayuda';
+
+test.describe('E2E · Mejoras v2.0 (Buscador rápido, Reportes y Abonos)', () => {
+  test.beforeEach(async ({ page }) => {
+    await iniciarSesionDemo(page);
+  });
+
+  test('el buscador rápido desde Inicio preselecciona una clasificación para vender', async ({ page }) => {
+    // 1. Abrir buscador rápido desde Inicio
+    const btnBuscarInicio = page.getByRole('button', { name: /Buscar producto, precio o existencia/i });
+    await expect(btnBuscarInicio).toBeVisible();
+    await btnBuscarInicio.click();
+
+    const sheet = page.locator('.sheet');
+    await expect(sheet).toBeVisible();
+
+    // 2. Buscar multi-término sin acentos
+    const inputGlobal = sheet.locator('input[type="search"]');
+    await inputGlobal.fill('aguacate pri');
+    await expect(sheet.locator('text=Aguacate Hass')).toBeVisible();
+    await expect(sheet.locator('text=Primera / Grande')).toBeVisible();
+
+    // 3. Saltar directo a Nueva venta con el producto preseleccionado
+    await sheet.getByRole('button', { name: 'Vender' }).first().click();
+    await expect(page).toHaveURL(/\/ventas\/nueva\?producto=/);
+    await expect(page.locator('.operacion-seleccion-compacta')).toContainText('Aguacate Hass');
+
+    // 4. Completar la venta con la clasificación que eligió el buscador.
+    const cantidad = page.locator('.operacion-cantidad input');
+    await expect(cantidad).toBeVisible();
+    await cantidad.fill('1');
+    await page.getByRole('button', { name: /Agregar al ticket/ }).click();
+    await page.getByRole('button', { name: /Registrar venta/ }).click();
+    await expect(page.getByRole('status')).toContainText('Venta registrada correctamente.');
+  });
+
+  test('reporte diario, semanal y mensual muestra ventas, ingresos y gráfica', async ({ page }) => {
+    await page.goto('/reportes');
+    await expect(page.getByRole('heading', { name: 'Reportes', exact: true })).toBeVisible();
+
+    // Vista semanal por defecto
+    await expect(page.locator('text=Ventas totales')).toBeVisible();
+    await expect(page.locator('text=Ingresos recibidos')).toBeVisible();
+    await expect(page.locator('text=Ventas vs. ingresos reales')).toBeVisible();
+
+    // Cambiar a Diario
+    await page.locator('button.chip:has-text("Diario")').click();
+    await expect(page.locator('td:has-text("Mañana")')).toBeVisible();
+
+    // Cambiar a Mensual y navegar al mes anterior (siempre tiene 4-5 semanas)
+    await page.locator('button.chip:has-text("Mensual")').click();
+    const btnAnterior = page.locator('button[aria-label="Periodo anterior"]');
+    await btnAnterior.click();
+    await expect(page.locator('button[aria-label="Periodo siguiente"]')).toBeEnabled();
+    await expect(page.locator('td:has-text("Sem 1")')).toBeVisible();
+    await expect(page.locator('text=Ventas totales')).toBeVisible();
+  });
+
+  test('control sencillo de abonos y deudas permite abonar directo desde vista por cliente', async ({ page }) => {
+    await page.goto('/deudas');
+    await expect(page.getByRole('heading', { name: 'Deudas', exact: true })).toBeVisible();
+    await expect(page.locator('text=Abonado hoy')).toBeVisible();
+
+    // Vista Por cliente activa por defecto
+    const btnPorCliente = page.getByRole('button', { name: 'Por cliente' });
+    await expect(btnPorCliente).toHaveAttribute('aria-pressed', 'true');
+
+    // Abonar directo sobre Juan Pérez
+    const filaJuan = page.locator('article, tr').filter({ hasText: 'Juan Pérez' }).first();
+    await expect(filaJuan).toBeVisible();
+    await filaJuan.getByRole('button', { name: 'Abonar' }).click();
+
+    const sheet = page.locator('.sheet');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('heading', { name: 'Registrar abono' })).toBeVisible();
+
+    // Seleccionar atajo rápido de $500
+    await sheet.locator('button.chip:has-text("$500")').click();
+    const btnRegistrar = sheet.getByRole('button', { name: /Registrar abono de \$500/i });
+    await expect(btnRegistrar).toBeEnabled();
+    await btnRegistrar.click();
+
+    // Verificar actualización inmediata, botón de comprobante y sección Últimos abonos
+    await expect(page.locator('.sheet')).toHaveCount(0);
+    await expect(page.locator('text=Abono registrado · Juan Pérez')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Copiar comprobante/i })).toBeVisible();
+    await expect(page.locator('section[aria-label="Últimos abonos"]')).toContainText('Juan Pérez');
+  });
+
+  test('pagos ofrece buscador, filtros avanzados, resumen por método y detalle interactivo', async ({ page }) => {
+    await page.goto('/pagos');
+    await expect(page.getByRole('heading', { name: 'Pagos', exact: true })).toBeVisible();
+
+    await expect(page.locator('.kpi', { hasText: 'Ingresos' })).toBeVisible();
+    await expect(page.locator('.kpi', { hasText: 'Egresos' })).toBeVisible();
+    await expect(page.locator('.kpi', { hasText: 'Balance neto' })).toBeVisible();
+
+    // Buscador por cliente / folio / concepto
+    const buscador = page.locator('input[type="search"]');
+    await buscador.fill('Doña Lupe');
+    await expect(page.locator('button.pagos-fila', { hasText: 'Abarrotes Doña Lupe' })).toBeVisible();
+    await expect(page.locator('button.pagos-fila', { hasText: 'Agrícola San Juan' })).toHaveCount(0);
+
+    // Limpiar búsqueda y filtrar por método Transferencia
+    await page.getByRole('button', { name: 'Limpiar búsqueda' }).click();
+    await page.getByRole('button', { name: /Filtros/i }).click();
+    const sheetFiltros = page.locator('.sheet');
+    await expect(sheetFiltros).toBeVisible();
+    await sheetFiltros.locator('button.chip:has-text("Transferencia")').click();
+    await sheetFiltros.locator('button.btn-p').click();
+
+    await expect(page.locator('.sheet')).toHaveCount(0);
+    await expect(page.locator('button.pagos-fila', { hasText: 'Agrícola San Juan' })).toBeVisible();
+    await expect(page.locator('button.pagos-fila', { hasText: 'Abarrotes Doña Lupe' })).toHaveCount(0);
+
+    // Limpiar filtros, abrir detalle y validar acciones contextuales
+    await page.getByRole('button', { name: 'Limpiar filtros' }).click();
+    const filaLupe = page.locator('button.pagos-fila', { hasText: 'Abarrotes Doña Lupe' }).first();
+    await expect(filaLupe).toBeVisible();
+    await filaLupe.click();
+
+    const detalle = page.locator('aside[aria-label="Detalle del movimiento"], .sheet');
+    await expect(detalle.getByText('Detalle del movimiento')).toBeVisible();
+    await expect(detalle.getByRole('button', { name: /Copiar comprobante/i })).toBeVisible();
+    await expect(detalle.getByRole('link', { name: /Ver cliente/i })).toBeVisible();
+  });
+
+  test('barra lateral de escritorio no desborda horizontalmente y mantiene accesible el botón contraer/expandir', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', 'La barra lateral de PC solo aplica en escritorio.');
+    await page.setViewportSize({ width: 1366, height: 768 });
+
+    const side = page.locator('aside.side');
+    const sideNav = side.locator('nav.side-nav');
+    const btnContraer = side.getByRole('button', { name: 'Contraer menú' });
+    await expect(side).toBeVisible();
+    await expect(sideNav).toBeVisible();
+    await expect(btnContraer).toBeVisible();
+
+    const sinDesbordeExpandida = await side.evaluate((el) => {
+      const nav = el.querySelector('nav.side-nav');
+      return el.scrollWidth <= el.clientWidth && (!nav || nav.scrollWidth <= nav.clientWidth);
+    });
+    expect(sinDesbordeExpandida).toBe(true);
+
+    const boxSide = (await side.boundingBox())!;
+    const boxBtnContraer = (await btnContraer.boundingBox())!;
+    expect(boxBtnContraer.x).toBeGreaterThanOrEqual(boxSide.x);
+    expect(boxBtnContraer.x + boxBtnContraer.width).toBeLessThanOrEqual(boxSide.x + boxSide.width);
+
+    await btnContraer.click();
+    const sideContraida = page.locator('aside.side.contraida');
+    const btnExpandir = sideContraida.getByRole('button', { name: 'Expandir menú' });
+    await expect(sideContraida).toBeVisible();
+    await expect(btnExpandir).toBeVisible();
+
+    const sinDesbordeContraida = await sideContraida.evaluate((el) => {
+      const nav = el.querySelector('nav.side-nav');
+      return el.scrollWidth <= el.clientWidth && (!nav || nav.scrollWidth <= nav.clientWidth);
+    });
+    expect(sinDesbordeContraida).toBe(true);
+
+    const boxSideCol = (await sideContraida.boundingBox())!;
+    const boxBtnExpandir = (await btnExpandir.boundingBox())!;
+    expect(boxBtnExpandir.x).toBeGreaterThanOrEqual(boxSideCol.x);
+    expect(boxBtnExpandir.x + boxBtnExpandir.width).toBeLessThanOrEqual(boxSideCol.x + boxSideCol.width);
+
+    const badge = sideContraida.locator('.side-badge').first();
+    if (await badge.isVisible()) {
+      const boxBadge = (await badge.boundingBox())!;
+      expect(boxBadge.x).toBeGreaterThanOrEqual(boxSideCol.x);
+      expect(boxBadge.x + boxBadge.width).toBeLessThanOrEqual(boxSideCol.x + boxSideCol.width);
+    }
+
+    await btnExpandir.click();
+    await expect(page.locator('aside.side.contraida')).toHaveCount(0);
+    await expect(btnContraer).toBeVisible();
+  });
+});

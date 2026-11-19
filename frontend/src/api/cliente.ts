@@ -58,13 +58,14 @@ const transporteHttp: Transporte = async (metodo, ruta, cuerpo, token) => {
 declare const __MODO_DEMO__: boolean;
 
 /**
- * En modo demo la API la responde un servidor de prueba local (src/demo), cargado bajo demanda.
+ * En modo demo la API la responde un servidor de prueba local (src/demo), precargado para soportar uso sin conexión.
  * La constante literal permite que el build normal elimine el import y no empaquete src/demo.
  */
+const servidorDemo = __MODO_DEMO__ ? import('../demo/servidor') : null;
 const transporteDemo: Transporte | null = __MODO_DEMO__
   ? async (metodo, ruta, cuerpo, token) => {
       if (typeof navigator !== 'undefined' && !navigator.onLine) throw new ErrorRed();
-      const { manejarSolicitud } = await import('../demo/servidor');
+      const { manejarSolicitud } = await servidorDemo!;
       return manejarSolicitud(metodo, ruta, cuerpo, token);
     }
   : null;

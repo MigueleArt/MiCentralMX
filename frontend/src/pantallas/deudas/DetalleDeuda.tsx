@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, Clock, HandCoins, History, X } from 'lucide-react';
+import { CircleAlert, CircleCheck, Clock, Copy, HandCoins, History, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useSesionActiva } from '../../auth/SesionContext';
@@ -9,6 +9,7 @@ import { ETIQUETA_METODO } from '../../dominio/formato';
 import { EncabezadoSecundario } from '../../layout/Encabezados';
 import { D, formatoMXN } from '../../lib/dinero';
 import { formatoDia, formatoFecha, formatoFechaHora, textoDias } from '../../lib/fechas';
+import { copiarAlPortapapeles, textoComprobanteAbono } from './comprobantes';
 import { useDeuda, type DatosDeuda } from './datosDeuda';
 import { RegistrarPago } from './RegistrarPago';
 
@@ -61,7 +62,7 @@ export function ContenidoDeuda({ d, compacto, alPagar }: { d: DatosDeuda; compac
         {compacto && alPagar && v.saldo.gt(0) && puede('pagos.registrar') && (
           <button type="button" className="btn btn-p btn-lg btn-ancho" onClick={alPagar} style={{ boxShadow: '0 4px 12px rgba(15,79,68,.22)' }}>
             <HandCoins className="ic" />
-            Registrar pago
+            Registrar abono
           </button>
         )}
       </section>
@@ -128,11 +129,34 @@ export function ContenidoDeuda({ d, compacto, alPagar }: { d: DatosDeuda; compac
 
 /** Panel lateral de Deudas · Tablet 768 y Deudas · PC 1440. */
 export function PanelDeuda({ ventaId, alCerrar }: { ventaId: string; alCerrar: () => void }) {
+  const { sesion } = useSesionActiva();
   const d = useDeuda(ventaId);
   const [pagando, setPagando] = useState(false);
-  const [registrado, setRegistrado] = useState<Pago | null>(null);
+  const [registrado, setRegistrado] = useState<{ pago: Pago; saldoAnterior: string; saldoRestante: string } | null>(null);
+  const [copiado, setCopiado] = useState(false);
   if (d === undefined) return <aside className="card" style={{ flex: 1, padding: 20 }}><Esqueleto filas={2} /></aside>;
   if (!d) return null;
+
+  const copiar = async () => {
+    if (!registrado) return;
+    const ok = await copiarAlPortapapeles(
+      textoComprobanteAbono({
+        negocio: sesion.negocio.nombre,
+        clienteNombre: registrado.pago.clienteNombre,
+        monto: registrado.pago.monto,
+        metodo: registrado.pago.metodo,
+        fecha: registrado.pago.creadoEnDispositivo,
+        saldoAnterior: registrado.saldoAnterior,
+        saldoRestante: registrado.saldoRestante,
+        nota: registrado.pago.nota,
+      }),
+    );
+    if (ok) {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    }
+  };
+
   return (
     <aside className="card" aria-label="Detalle de la deuda" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', alignSelf: 'flex-start' }}>
       <div className="fila-entre" style={{ padding: '18px 20px', borderBottom: '1px solid var(--gris-1)', alignItems: 'flex-start' }}>
@@ -150,8 +174,16 @@ export function PanelDeuda({ ventaId, alCerrar }: { ventaId: string; alCerrar: (
         {registrado && (
           <div style={{ marginBottom: 12 }}>
             <AvisoLinea tono="ok" icono={<CircleCheck className="ic" />}>
-              <strong>Pago registrado correctamente</strong>
-              {formatoMXN(registrado.monto)} en {ETIQUETA_METODO[registrado.metodo].toLowerCase()} · saldo actualizado
+              <div className="fila-entre" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <div>
+                  <strong>Abono registrado correctamente</strong>
+                  {formatoMXN(registrado.pago.monto)} en {ETIQUETA_METODO[registrado.pago.metodo].toLowerCase()} · saldo actualizado
+                </div>
+                <button type="button" className="btn btn-q btn-sm" onClick={() => void copiar()}>
+                  <Copy className="ic" />
+                  {copiado ? 'Copiado' : 'Copiar comprobante'}
+                </button>
+              </div>
             </AvisoLinea>
           </div>
         )}
@@ -165,8 +197,11 @@ export function PanelDeuda({ ventaId, alCerrar }: { ventaId: string; alCerrar: (
           saldo={d.v.saldo.toString()}
           alCerrar={() => setPagando(false)}
           alRegistrar={(p) => {
+            const saldoAnterior = d.v.saldo.toString();
+            const saldoRestante = d.v.saldo.minus(p.monto).toFixed(2);
             setPagando(false);
-            setRegistrado(p);
+            setCopiado(false);
+            setRegistrado({ pago: p, saldoAnterior, saldoRestante });
           }}
         />
       )}
@@ -174,14 +209,15 @@ export function PanelDeuda({ ventaId, alCerrar }: { ventaId: string; alCerrar: (
   );
 }
 
-/** Pantallas 11 (Detalle de deuda), 12 (Registrar pago) y 13 (Pago registrado). */
+/** Pantallas 11 (Detalle de deuda), 12 (Registrar abono) y 13 (Abono registrado). */
 export default function DetalleDeuda() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const navegar = useNavigate();
-  const { puede } = useSesionActiva();
+  const { sesion, puede } = useSesionActiva();
   const d = useDeuda(id);
-  const [registrado, setRegistrado] = useState<Pago | null>(null);
+  const [registrado, setRegistrado] = useState<{ pago: Pago; saldoAnterior: string; saldoRestante: string } | null>(null);
+  const [copiado, setCopiado] = useState(false);
   const pagando = params.get('pago') === '1';
 
   if (d === undefined) {
@@ -203,6 +239,27 @@ export default function DetalleDeuda() {
     );
   }
   const { v } = d;
+
+  const copiar = async () => {
+    if (!registrado) return;
+    const ok = await copiarAlPortapapeles(
+      textoComprobanteAbono({
+        negocio: sesion.negocio.nombre,
+        clienteNombre: registrado.pago.clienteNombre,
+        monto: registrado.pago.monto,
+        metodo: registrado.pago.metodo,
+        fecha: registrado.pago.creadoEnDispositivo,
+        saldoAnterior: registrado.saldoAnterior,
+        saldoRestante: registrado.saldoRestante,
+        nota: registrado.pago.nota,
+      }),
+    );
+    if (ok) {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    }
+  };
+
   return (
     <>
       <EncabezadoSecundario titulo={v.venta.clienteNombre} subtitulo={`Deuda · Venta ${v.folio}`} volverA="/deudas" />
@@ -210,9 +267,17 @@ export default function DetalleDeuda() {
         <div className="pila-16 contenedor-form" style={{ margin: '0 auto' }}>
           {registrado && (
             <AvisoLinea tono="ok" icono={<CircleCheck className="ic" />}>
-              <strong>Pago registrado correctamente</strong>
-              {formatoMXN(registrado.monto)} en {ETIQUETA_METODO[registrado.metodo].toLowerCase()} · saldo actualizado
-              {D(registrado.excedente).gt(0) && ` · ${formatoMXN(registrado.excedente)} como saldo a favor (en revisión)`}
+              <div className="fila-entre" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <div>
+                  <strong>Abono registrado correctamente</strong>
+                  {formatoMXN(registrado.pago.monto)} en {ETIQUETA_METODO[registrado.pago.metodo].toLowerCase()} · saldo actualizado
+                  {D(registrado.pago.excedente).gt(0) && ` · ${formatoMXN(registrado.pago.excedente)} como saldo a favor (en revisión)`}
+                </div>
+                <button type="button" className="btn btn-q btn-sm" onClick={() => void copiar()}>
+                  <Copy className="ic" />
+                  {copiado ? 'Copiado' : 'Copiar comprobante'}
+                </button>
+              </div>
             </AvisoLinea>
           )}
           <ContenidoDeuda d={d} />
@@ -226,7 +291,7 @@ export default function DetalleDeuda() {
         {v.saldo.gt(0) && puede('pagos.registrar') && (
           <button type="button" className="btn btn-p" style={{ flex: 1.4 }} onClick={() => setParams({ pago: '1' }, { replace: true })}>
             <HandCoins className="ic" />
-            Registrar pago
+            Registrar abono
           </button>
         )}
       </div>
@@ -238,7 +303,10 @@ export default function DetalleDeuda() {
           saldo={v.saldo.toString()}
           alCerrar={() => navegar(`/deudas/${v.venta.id}`, { replace: true })}
           alRegistrar={(p) => {
-            setRegistrado(p);
+            const saldoAnterior = v.saldo.toString();
+            const saldoRestante = v.saldo.minus(p.monto).toFixed(2);
+            setCopiado(false);
+            setRegistrado({ pago: p, saldoAnterior, saldoRestante });
             navegar(`/deudas/${v.venta.id}`, { replace: true });
           }}
         />

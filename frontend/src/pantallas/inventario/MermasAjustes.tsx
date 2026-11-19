@@ -131,6 +131,7 @@ export default function MermasAjustes() {
 
           <Campo etiqueta="Producto" id="mp" error={errores.producto}>
             <ElegirEnLista
+              buscarSiempre
               id="mp"
               titulo="Producto"
               marcador="Elegir producto"

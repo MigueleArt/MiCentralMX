@@ -2,13 +2,16 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { CircleAlert, Check, LoaderCircle, WifiOff } from 'lucide-react';
 import { EncabezadoSecundario } from '../../layout/Encabezados';
-import { Esqueleto, AvisoLinea } from '../../componentes/Estados';
+import { Esqueleto, AvisoLinea, EstadoVacio } from '../../componentes/Estados';
+import { Buscador } from '../../componentes/Formulario';
+import { buscarInventario } from '../../dominio/buscarInventario';
 import { useCatalogo } from '../../hooks/useDatosLocales';
 import { useConectividad } from '../../sync/conectividad';
 import { useAvisos } from '../../componentes/Avisos';
 import { D, formatoMXN } from '../../lib/dinero';
 import { editarPrecios } from '../../dominio/enLinea';
 import { mensajeError } from '../../api/cliente';
+import './precios-hoy.css';
 
 export default function PreciosHoy() {
   const navegar = useNavigate();
@@ -17,6 +20,7 @@ export default function PreciosHoy() {
   const catalogo = useCatalogo();
 
   const [precios, setPrecios] = useState<Record<string, string>>({});
+  const [q, setQ] = useState('');
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +50,9 @@ export default function PreciosHoy() {
   const cambiarPrecio = (clasificacionId: string, val: string) => {
     setPrecios((prev) => ({ ...prev, [clasificacionId]: val }));
   };
+
+  const visibles = buscarInventario(catalogo, q, 'todos');
+  const totalClasVisibles = visibles.reduce((n, p) => n + p.clasificaciones.length, 0);
 
   const guardar = async () => {
     setError(null);
@@ -91,64 +98,75 @@ export default function PreciosHoy() {
             Ajusta los precios de venta para todas las clasificaciones. Los cambios aplicarán de inmediato a las nuevas ventas.
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {catalogo.map((prod) => (
-              <div key={prod.producto.id} className="card" style={{ padding: 14, overflow: 'hidden' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, borderBottom: '1px solid var(--borde-tenue)', paddingBottom: 6 }}>
-                  <p style={{ fontWeight: 700, fontSize: 16 }}>{prod.producto.nombre}</p>
+          <Buscador
+            valor={q}
+            alCambiar={setQ}
+            etiqueta="Buscar producto o clasificación"
+            marcador="Buscar producto o clasificación…"
+          />
+
+          {q.trim() && (
+            <p className="t-aux" role="status">
+              {visibles.length} {visibles.length === 1 ? 'producto' : 'productos'} · {totalClasVisibles} {totalClasVisibles === 1 ? 'clasificación' : 'clasificaciones'}
+            </p>
+          )}
+
+          {visibles.length === 0 ? (
+            <EstadoVacio
+              titulo="Sin resultados"
+              texto={`No hay productos que coincidan con “${q}”.`}
+              acciones={
+                <button type="button" className="btn btn-q" onClick={() => setQ('')}>
+                  Limpiar búsqueda
+                </button>
+              }
+            />
+          ) : (
+            <div className="precios-hoy-lista">
+              {visibles.map((prod) => (
+                <div key={prod.producto.id} className="card precios-hoy-producto">
+                <div className="precios-hoy-encabezado">
+                  <p>{prod.producto.nombre}</p>
                   <span className="t-aux">Vendido por {prod.unidad.nombre}</span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="precios-hoy-clasificaciones">
                   {prod.clasificaciones.map((c) => {
                     const cid = c.clasificacion.id;
                     const precioActual = precios[cid] ?? c.clasificacion.precio;
                     const modificado = !D(precioActual || 0).eq(c.clasificacion.precio);
 
                     return (
-                      <div
-                        key={cid}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 12,
-                          padding: '6px 0',
-                          borderBottom: '1px solid var(--borde-tenue)',
-                        }}
-                      >
-                        <div style={{ flex: 1 }}>
-                          <p style={{ fontWeight: 600, fontSize: 14 }}>{c.clasificacion.nombre}</p>
+                      <div key={cid} className="precios-hoy-fila">
+                        <div className="precios-hoy-detalle">
+                          <p>{c.clasificacion.nombre}</p>
                           <p className="t-aux" style={{ fontSize: 12 }}>
                             Precio anterior: {formatoMXN(c.clasificacion.precio)}
                             {c.clasificacion.ultimoCosto && ` · Costo: ${formatoMXN(c.clasificacion.ultimoCosto)}`}
                           </p>
                         </div>
 
-                        <div style={{ width: 130, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ color: 'var(--texto-tenue)', fontWeight: 600 }}>$</span>
+                        <label className="precios-hoy-input">
+                          <span>$</span>
                           <input
                             type="number"
                             step="0.50"
                             min="0"
+                            inputMode="decimal"
                             value={precioActual}
                             onChange={(e) => cambiarPrecio(cid, e.target.value)}
-                            className="entrada num"
-                            style={{
-                              textAlign: 'right',
-                              fontWeight: 700,
-                              fontSize: 16,
-                              borderColor: modificado ? 'var(--primario)' : undefined,
-                            }}
+                            className={`entrada num precios-hoy-campo${modificado ? ' modificado' : ''}`}
+                            aria-label={`Precio de ${prod.producto.nombre}, ${c.clasificacion.nombre}`}
                           />
-                        </div>
+                        </label>
                       </div>
                     );
                   })}
                 </div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {error && <AvisoLinea tono="err" icono={<CircleAlert className="ic" />}>{error}</AvisoLinea>}
 

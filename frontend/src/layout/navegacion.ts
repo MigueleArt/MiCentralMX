@@ -1,5 +1,6 @@
 import {
   ChartColumn,
+  Boxes,
   ClipboardCheck,
   ClipboardList,
   Ellipsis,
@@ -39,6 +40,7 @@ const D = {
   proveedores: { ruta: '/proveedores', texto: 'Proveedores y ranchos', icono: Truck, permiso: 'compras.crear' },
   pagos: { ruta: '/pagos', texto: 'Pagos', icono: Wallet },
   mermas: { ruta: '/inventario/mermas', texto: 'Mermas', icono: PackageMinus, permiso: 'inventario.merma' },
+  envases: { ruta: '/envases', texto: 'Cajas por recuperar', icono: Boxes, permiso: 'envases.gestionar' },
   reportes: { ruta: '/reportes', texto: 'Reportes', icono: ChartColumn, permiso: 'reportes.ver' },
   usuarios: { ruta: '/usuarios', texto: 'Usuarios', icono: UserCog, permiso: 'usuarios.gestionar' },
   historial: { ruta: '/historial', texto: 'Historial', icono: History, permiso: 'historial.ver' },
@@ -56,11 +58,11 @@ export const NAV_TELEFONO: Destino[] = [D.inicio, D.ventas, D.deudas, D.inventar
 export const NAV_TABLET: Destino[] = [D.inicio, D.carga, D.inventario, D.ventas, D.clientes, D.deudas, D.compras, D.pagos, D.mas];
 
 /** Barra lateral de PC, como en el prototipo. */
-export const NAV_PC_OPERACION: Destino[] = [D.inicio, D.carga, D.inventario, D.ventas, D.compras, D.clientes, D.proveedores, D.pagos, D.deudas, D.mermas];
+export const NAV_PC_OPERACION: Destino[] = [D.inicio, D.carga, D.inventario, D.ventas, D.compras, D.clientes, D.proveedores, D.pagos, D.deudas, D.envases, D.mermas];
 export const NAV_PC_ADMIN: Destino[] = [D.reportes, D.revisiones, D.usuarios, D.historial, D.configuracion];
 
 /** Pantalla "Más" del teléfono. */
-export const MAS_OPERACION: Destino[] = [D.carga, D.clientes, D.compras, D.proveedores, D.pagos, { ...D.mermas, texto: 'Mermas / Ajustes' }];
+export const MAS_OPERACION: Destino[] = [D.carga, D.clientes, D.compras, D.proveedores, D.pagos, D.envases, { ...D.mermas, texto: 'Mermas / Ajustes' }];
 export const MAS_ADMIN: Destino[] = [D.reportes, D.revisiones, { ...D.usuarios, texto: 'Usuarios' }, D.historial, D.configuracion];
 
 export const ICONO_LISTA = ClipboardList;

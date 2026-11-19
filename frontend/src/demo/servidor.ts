@@ -12,6 +12,7 @@ import type {
   AccionRevision,
   AlertaInventario,
   BloqueFolio,
+  GranularidadReporte,
   OperacionEnRevision,
   DatosMerma,
   DatosProducto,
@@ -46,7 +47,8 @@ import type {
 } from '@micentralmx/shared/entidades';
 import { ROLES_BASE, type Permiso } from '@micentralmx/shared/permisos';
 import { aImporte, D, formatoMXN, sumar } from '../lib/dinero';
-import { diaLocal, diferenciaDias } from '../lib/fechas';
+import { diaLocal } from '../lib/fechas';
+import { calcularResumenReportes } from '../dominio/reportesLocales';
 import { nuevoId } from '../lib/ids';
 import { folioCompra, folioVenta } from '../dominio/formato';
 import { crearSemilla, type AuditoriaServidor, type RolServidor, type UsuarioServidor } from './semilla';
@@ -456,7 +458,7 @@ async function guardarProducto(d: DatosProducto, usuario: UsuarioServidor, id?: 
   if (!d.clasificaciones?.length) return error(422, 'Agrega al menos una clasificación.');
   const previo = id ? await obtener<Producto>('productos', id) : undefined;
   if (id && !previo) return error(404, 'El producto no existe.');
-  const producto: Producto = { id: id ?? nuevoId(), nombre: d.nombre.trim(), unidadId: d.unidadId, umbralBajo: D(d.umbralBajo || 0).toString(), archivadoEn: null };
+  const producto: Producto = { id: id ?? nuevoId(), nombre: d.nombre.trim(), unidadId: d.unidadId, umbralBajo: D(d.umbralBajo || 0).toString(), kilogramosPorUnidad: d.kilogramosPorUnidad ?? null, archivadoEn: null };
   await guardar('productos', producto.id, producto);
   const existentes = (await todos<Clasificacion>('clasificaciones')).filter((c) => c.productoId === producto.id);
   for (const [orden, c] of d.clasificaciones.entries()) {
@@ -482,50 +484,32 @@ async function guardarProducto(d: DatosProducto, usuario: UsuarioServidor, id?: 
   return ok(producto);
 }
 
-async function resumen(desde: string, hasta: string): Promise<ResumenReportes> {
-  const enRango = (iso: string) => {
-    const d = diaLocal(iso);
-    return d >= desde && d <= hasta;
-  };
-  const ventas = (await todos<Venta>('ventas')).filter((v) => v.estado !== 'cancelada');
-  const delRango = ventas.filter((v) => enRango(v.creadoEnDispositivo));
-  const compras = (await todos<Compra>('compras')).filter((c) => enRango(c.creadoEnDispositivo));
-  const pagos = (await todos<Pago>('pagos')).filter((p) => enRango(p.creadoEnDispositivo));
-  const dinero = (await todos<MovimientoDinero>('movimientosDinero')).filter((m) => enRango(m.creadoEn));
-  const movs = (await todos<MovimientoInventario>('movimientosInventario')).filter((m) => m.tipo === 'merma' && enRango(m.creadoEn));
-  const clasificaciones = await todos<Clasificacion>('clasificaciones');
-  const productos = (await todos<Producto>('productos')).filter((p) => !p.archivadoEn);
-  const existencias = await todos<{ clasificacionId: string; cantidad: string }>('existencias');
-  const hoy = diaLocal();
-  const abiertas = ventas.filter((v) => v.formaPago === 'credito' && D(v.total).gt(v.pagado));
-  let bajos = 0;
-  for (const p of productos) {
-    for (const c of clasificaciones.filter((x) => x.productoId === p.id && !x.archivadoEn)) {
-      const e = D(existencias.find((x) => x.clasificacionId === c.id)?.cantidad ?? 0);
-      if (e.gt(0) && e.lte(p.umbralBajo)) bajos++;
-    }
-  }
-  return {
+async function resumen(desde: string, hasta: string, granularidad?: GranularidadReporte): Promise<ResumenReportes> {
+  const [
+    ventas,
+    compras,
+    pagos,
+    movimientosDinero,
+    movimientosInventario,
+    productos,
+    clasificaciones,
+    existencias,
+  ] = await Promise.all([
+    todos<Venta>('ventas'),
+    todos<Compra>('compras'),
+    todos<Pago>('pagos'),
+    todos<MovimientoDinero>('movimientosDinero'),
+    todos<MovimientoInventario>('movimientosInventario'),
+    todos<Producto>('productos'),
+    todos<Clasificacion>('clasificaciones'),
+    todos<{ clasificacionId: string; cantidad: string }>('existencias'),
+  ]);
+  return calcularResumenReportes(
+    { ventas, compras, pagos, movimientosDinero, movimientosInventario, productos, clasificaciones, existencias },
     desde,
     hasta,
-    ventas: { total: aImporte(sumar(delRango.map((v) => v.total))), cantidad: delRango.length, aCredito: delRango.filter((v) => v.formaPago === 'credito').length },
-    compras: { total: aImporte(sumar(compras.map((c) => c.total))), cantidad: compras.length, proveedores: new Set(compras.map((c) => c.proveedorId)).size },
-    inventario: { productos: productos.length, bajos },
-    pagos: {
-      ingresos: aImporte(sumar([...pagos.map((p) => p.monto), ...dinero.filter((m) => m.tipo === 'ingreso').map((m) => m.monto)])),
-      egresos: aImporte(sumar(dinero.filter((m) => m.tipo === 'egreso').map((m) => m.monto))),
-    },
-    deudas: {
-      porCobrar: aImporte(sumar(abiertas.map((v) => D(v.total).minus(v.pagado)))),
-      vencido: aImporte(sumar(abiertas.filter((v) => v.venceEl && diferenciaDias(hoy, v.venceEl) < 0).map((v) => D(v.total).minus(v.pagado)))),
-    },
-    mermas: {
-      // Valor con el último costo de compra de la clasificación (decisiones técnicas §3).
-      valor: aImporte(sumar(movs.map((m) => D(m.delta).abs().times(clasificaciones.find((c) => c.id === m.clasificacionId)?.ultimoCosto ?? 0)))),
-      cantidad: sumar(movs.map((m) => D(m.delta).abs())).toString(),
-      unidad: 'unidades',
-    },
-  };
+    granularidad,
+  );
 }
 
 // ── Enrutador ───────────────────────────────────────────────────────────────
@@ -713,12 +697,14 @@ ruta('PATCH', '/catalogo/precios', async ({ cuerpo, usuario }) => {
 ruta('PATCH', '/catalogo/unidades/:id', async ({ cuerpo, usuario, params }) => {
   const e = exigir(usuario, await permisos(usuario), 'configuracion.editar');
   if (e) return e;
-  const u = await obtener<{ id: string; nombre: string; plural: string; permiteDecimales: boolean; archivadoEn: string | null }>('unidades', params[0]);
+  const u = await obtener<{ id: string; nombre: string; plural: string; permiteDecimales: boolean; kilogramosPorUnidad?: string | null; archivadoEn: string | null }>('unidades', params[0]);
   if (!u) return error(404, 'La unidad no existe.');
   const permiteDecimales = Boolean(cuerpo.permiteDecimales);
-  await guardar('unidades', u.id, { ...u, permiteDecimales });
+  const kgValor = cuerpo.kilogramosPorUnidad;
+  const kilogramosPorUnidad = kgValor === undefined ? u.kilogramosPorUnidad ?? null : kgValor === null ? null : D(kgValor).toString();
+  await guardar('unidades', u.id, { ...u, permiteDecimales, kilogramosPorUnidad });
   await auditar(usuario.nombre, 'configuracion', `${usuario.nombre} ${permiteDecimales ? 'activó' : 'desactivó'} decimales para la unidad ${u.nombre}`);
-  return ok({ ...u, permiteDecimales });
+  return ok({ ...u, permiteDecimales, kilogramosPorUnidad });
 });
 
 ruta('POST', '/cargas/:id/cerrar', async ({ cuerpo, usuario, params }) => {
@@ -852,7 +838,9 @@ ruta('PATCH', '/configuracion', async ({ cuerpo, usuario }) => {
 ruta('GET', '/reportes/resumen', async ({ query, usuario }) => {
   const e = exigir(usuario, await permisos(usuario), 'reportes.ver');
   if (e) return e;
-  return ok(await resumen(query.get('desde') ?? diaLocal(), query.get('hasta') ?? diaLocal()));
+  const g = query.get('granularidad');
+  const gran = g === 'dia' || g === 'semana' || g === 'mes' ? g : undefined;
+  return ok(await resumen(query.get('desde') ?? diaLocal(), query.get('hasta') ?? diaLocal(), gran));
 });
 
 // ── Liquidaciones y estado de cuenta de productores ─────────────────────────

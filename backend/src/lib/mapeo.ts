@@ -10,6 +10,7 @@ import type {
   LiquidacionConcepto,
   LiquidacionRenglon,
   MovimientoDinero,
+  MovimientoEnvase,
   MovimientoInventario,
   Pago,
   Producto,
@@ -30,6 +31,7 @@ export const unidad = (r: Fila<typeof e.unidades>): Unidad => ({
   nombre: r.nombre,
   plural: r.plural,
   permiteDecimales: r.permiteDecimales,
+  kilogramosPorUnidad: r.kilogramosPorUnidad,
   archivadoEn: iso(r.archivadoEn),
 });
 
@@ -38,6 +40,7 @@ export const producto = (r: Fila<typeof e.productos>): Producto => ({
   nombre: r.nombre,
   unidadId: r.unidadId,
   umbralBajo: r.umbralBajo,
+  kilogramosPorUnidad: r.kilogramosPorUnidad,
   archivadoEn: iso(r.archivadoEn),
 });
 
@@ -206,6 +209,21 @@ export const movimientoDinero = (r: Fila<typeof e.movimientosDinero>): Movimient
   compraId: r.compraId ?? null,
   usuarioNombre: r.usuarioNombre,
   creadoEn: r.creadoEn.toISOString(),
+});
+
+export const movimientoEnvase = (r: Fila<typeof e.movimientosEnvase>): MovimientoEnvase => ({
+  id: r.id,
+  clienteId: r.clienteId,
+  clienteNombre: r.clienteNombre,
+  envase: r.envase,
+  tipo: r.tipo,
+  cantidad: r.cantidad,
+  direccion: r.direccion,
+  nota: r.nota,
+  ventaId: r.ventaId,
+  usuarioId: r.usuarioId,
+  usuarioNombre: r.usuarioNombre,
+  creadoEnDispositivo: r.creadoEnDispositivo.toISOString(),
 });
 
 export const liquidacionRenglon = (r: Fila<typeof e.liquidacionRenglones>): LiquidacionRenglon => ({

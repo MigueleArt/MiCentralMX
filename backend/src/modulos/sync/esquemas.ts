@@ -84,6 +84,28 @@ export const esquemaMovimientoDinero = z.object({
   creadoEn: fecha,
 });
 
+export const esquemaMovimientoEnvase = z.object({
+  id,
+  clienteId: id,
+  envase: z.string().trim().min(1).max(60),
+  tipo: z.enum(['entrega', 'devolucion', 'saldo_inicial', 'ajuste']),
+  cantidad: decimal,
+  direccion: z.enum(['aumenta', 'reduce']).nullable(),
+  nota: z.string().trim().max(300).nullable(),
+  ventaId: id.nullable(),
+}).superRefine((m, ctx) => {
+  const n = Number(m.cantidad);
+  if (!Number.isSafeInteger(n) || n < 0 || (m.tipo !== 'saldo_inicial' && n === 0)) {
+    ctx.addIssue({ code: 'custom', path: ['cantidad'], message: 'La cantidad debe ser un entero mayor que cero (el saldo inicial puede ser cero).' });
+  }
+  if ((m.tipo === 'ajuste') !== (m.direccion !== null)) {
+    ctx.addIssue({ code: 'custom', path: ['direccion'], message: 'Indica si el ajuste aumenta o reduce el saldo.' });
+  }
+  if (m.tipo === 'ajuste' && !m.nota) {
+    ctx.addIssue({ code: 'custom', path: ['nota'], message: 'Describe el motivo del ajuste.' });
+  }
+});
+
 export const esquemaCarga = z.object({
   id,
   fecha: dia,
@@ -106,6 +128,7 @@ export const TIPOS_OPERACION = [
   'merma.crear',
   'cliente.crear',
   'movimiento_dinero.crear',
+  'envase.movimiento',
   'carga',
   'carga.crear',
 ] as const;

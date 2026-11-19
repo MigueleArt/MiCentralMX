@@ -1,0 +1,6 @@
+.inventario-busqueda { display: flex; flex-direction: column; gap: 8px; }
+.inventario-busqueda .search { flex: none; }
+.inventario-busqueda .inp { padding-right: 50px; }
+.inventario-clasificacion { display: inline-flex; padding: 5px 10px; border-radius: 8px; background: var(--color-primario-tenue); color: var(--color-primario-osc); font-weight: 600; }
+.inventario-mejorado .tbl td { padding-top: 16px; padding-bottom: 16px; }
+.inventario-mejorado .tbl .num { font-weight: 600; }

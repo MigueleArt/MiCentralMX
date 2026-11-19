@@ -7,7 +7,7 @@
  */
 import Decimal from 'decimal.js';
 import { exigirOperable, tienePermiso } from '../auth/sesion';
-import type { DatosCrearAjusteProductor, DatosCrearLiquidacion, DatosMerma, DatosOperacion, TipoOperacion } from '@micentralmx/shared/api';
+import type { DatosCrearAjusteProductor, DatosCrearLiquidacion, DatosMerma, DatosMovimientoEnvase, DatosOperacion, TipoOperacion } from '@micentralmx/shared/api';
 import type {
   Carga,
   Cliente,
@@ -25,6 +25,7 @@ import type {
   LiquidacionRenglon,
   LiquidacionConcepto,
   AjusteProductor,
+  MovimientoEnvase,
 } from '@micentralmx/shared/entidades';
 import { db, type OperacionLocal, type SesionLocal } from '../db/db';
 import { aCantidad, aImporte, D, formatoMXN, sumar } from '../lib/dinero';
@@ -283,6 +284,60 @@ export async function registrarPago(entrada: EntradaPago): Promise<Pago> {
     });
     avisarOperacionNueva();
     return pago;
+  });
+}
+
+// ── Envases retornables ─────────────────────────────────────────────────────
+
+export async function registrarMovimientoEnvase(entrada: Omit<DatosMovimientoEnvase, 'id' | 'creadoEnDispositivo' | 'clienteNombre'>): Promise<MovimientoEnvase> {
+  const { sesion } = await exigirOperable();
+  exigirPermiso(sesion, 'envases.gestionar', 'registrar movimientos de envases');
+  const cliente = await db.clientes.get(entrada.clienteId);
+  if (!cliente) throw new ErrorValidacion('Elige un cliente.', 'cliente');
+  const envase = entrada.envase.trim();
+  if (!envase || envase.length > 60) throw new ErrorValidacion('Escribe el tipo de envase.', 'envase');
+  const cantidad = D(entrada.cantidad);
+  if (!cantidad.isFinite() || cantidad.lt(0) || !cantidad.isInteger()) throw new ErrorValidacion('Usa una cantidad entera válida.', 'cantidad');
+  if (cantidad.eq(0) && entrada.tipo !== 'saldo_inicial') throw new ErrorValidacion('La cantidad debe ser mayor que cero.', 'cantidad');
+  if (entrada.tipo === 'ajuste' && !entrada.direccion) throw new ErrorValidacion('Indica si el ajuste aumenta o reduce el saldo.', 'direccion');
+  if (entrada.tipo !== 'ajuste' && entrada.direccion) throw new ErrorValidacion('Solo los ajustes necesitan dirección.', 'direccion');
+  if (entrada.tipo === 'ajuste' && !entrada.nota?.trim()) throw new ErrorValidacion('Describe el motivo del ajuste.', 'nota');
+  if ((entrada.tipo === 'saldo_inicial' || entrada.tipo === 'ajuste') && !tienePermiso(sesion.usuario, 'envases.ajustar')) {
+    throw new ErrorValidacion('Tu rol no permite registrar saldos iniciales o ajustes de envases.');
+  }
+  if (entrada.tipo === 'saldo_inicial') {
+    const anteriores = await db.movimientosEnvase.where('clienteId').equals(cliente.id).toArray();
+    if (anteriores.some((m) => m.envase.toLocaleLowerCase() === envase.toLocaleLowerCase() && m.tipo === 'saldo_inicial')) {
+      throw new ErrorValidacion('Ya existe un saldo inicial para este envase. Usa un ajuste para corregirlo.', 'tipo');
+    }
+  }
+  if (entrada.ventaId) {
+    const venta = await db.ventas.get(entrada.ventaId);
+    if (!venta || venta.clienteId !== cliente.id) throw new ErrorValidacion('La venta debe pertenecer al cliente seleccionado.', 'venta');
+  }
+  const creadoEnDispositivo = ahoraIso();
+  const datos: DatosMovimientoEnvase = { ...entrada, id: nuevoId(), clienteNombre: cliente.nombre, envase, cantidad: aCantidad(cantidad), nota: entrada.nota?.trim() || null, creadoEnDispositivo };
+  const movimiento: MovimientoEnvase = {
+    ...datos,
+    clienteNombre: cliente.nombre,
+    usuarioId: sesion.usuario.id,
+    usuarioNombre: sesion.usuario.nombre,
+  };
+  return conAlmacenamiento(async () => {
+    const descripcion = `${cliente.nombre} · ${entrada.tipo === 'entrega' ? 'entrega' : entrada.tipo === 'devolucion' ? 'devolución' : entrada.tipo === 'saldo_inicial' ? 'saldo inicial' : 'ajuste'} ${cantidad} ${envase}`;
+    const op = await nuevaOperacion('envase.movimiento', datos, sesion, descripcion, movimiento.id);
+    await db.transaction('rw', db.movimientosEnvase, db.operaciones, async () => {
+      if (entrada.tipo === 'saldo_inicial') {
+        const anteriores = await db.movimientosEnvase.where('clienteId').equals(cliente.id).toArray();
+        if (anteriores.some((m) => m.envase.toLocaleLowerCase() === envase.toLocaleLowerCase() && m.tipo === 'saldo_inicial')) {
+          throw new ErrorValidacion('Ya existe un saldo inicial para este envase. Usa un ajuste para corregirlo.', 'tipo');
+        }
+      }
+      await db.movimientosEnvase.add({ ...movimiento, operacionId: op.operacionId });
+      await db.operaciones.add(op);
+    });
+    avisarOperacionNueva();
+    return movimiento;
   });
 }
 

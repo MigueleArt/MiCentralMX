@@ -83,6 +83,7 @@ export const unidades = pgTable('unidades', {
   nombre: text('nombre').notNull(),
   plural: text('plural').notNull(),
   permiteDecimales: boolean('permite_decimales').notNull(),
+  kilogramosPorUnidad: cantidad('kilogramos_por_unidad'),
   archivadoEn: ts('archivado_en'),
   txId: xid8('tx_id'),
 });
@@ -93,6 +94,7 @@ export const productos = pgTable('productos', {
   nombre: text('nombre').notNull(),
   unidadId: uuid('unidad_id').notNull(),
   umbralBajo: cantidad('umbral_bajo').notNull(),
+  kilogramosPorUnidad: cantidad('kilogramos_por_unidad'),
   archivadoEn: ts('archivado_en'),
   txId: xid8('tx_id'),
 });
@@ -239,6 +241,23 @@ export const pagos = pgTable('pagos', {
   usuarioNombre: text('usuario_nombre').notNull(),
   creadoEnDispositivo: ts('creado_en_dispositivo').notNull(),
   requiereRevision: boolean('requiere_revision').notNull(),
+  txId: xid8('tx_id'),
+});
+
+export const movimientosEnvase = pgTable('movimientos_envase', {
+  id: uuid('id').primaryKey(),
+  negocioId: uuid('negocio_id').notNull(),
+  clienteId: uuid('cliente_id').notNull(),
+  clienteNombre: text('cliente_nombre').notNull(),
+  envase: text('envase').notNull(),
+  tipo: text('tipo').$type<'entrega' | 'devolucion' | 'saldo_inicial' | 'ajuste'>().notNull(),
+  cantidad: numeric('cantidad', { precision: 12, scale: 3 }).notNull(),
+  direccion: text('direccion').$type<'aumenta' | 'reduce' | null>(),
+  nota: text('nota'),
+  ventaId: uuid('venta_id'),
+  usuarioId: uuid('usuario_id').notNull(),
+  usuarioNombre: text('usuario_nombre').notNull(),
+  creadoEnDispositivo: ts('creado_en_dispositivo').notNull(),
   txId: xid8('tx_id'),
 });
 

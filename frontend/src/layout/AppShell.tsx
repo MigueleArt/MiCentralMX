@@ -1,8 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronsLeft, ChevronsRight, Lock } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronsLeft, ChevronsRight, Lock, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useSesionActiva } from '../auth/SesionContext';
+import { BuscadorProductosContext, BuscadorRapidoProductos } from '../componentes/BuscadorRapidoProductos';
 import { Logotipo, Marca } from '../componentes/Marca';
 import { MODO_DEMO } from '../config';
 import { deudasVista } from '../dominio/consultas';
@@ -41,14 +42,21 @@ function NavInferior() {
   );
 }
 
-function Rail() {
+function Rail({ alAbrirBuscador }: { alAbrirBuscador: () => void }) {
   const { pathname } = useLocation();
+  const { puede } = useSesionActiva();
   const vencidas = useVencidas();
   return (
     <nav className="rail" aria-label="Navegación principal">
       <div style={{ padding: '4px 0 12px' }}>
         <Logotipo tamano={36} />
       </div>
+      {puede('inventario.ver') && (
+        <button type="button" className="rail-buscar" onClick={alAbrirBuscador} aria-label="Buscar producto" title="Buscar producto (Ctrl+K)">
+          <Search className="ic" />
+          <span>Buscar</span>
+        </button>
+      )}
       {useVisibles(NAV_TABLET).map((d) => (
         <NavLink key={d.ruta} to={d.ruta} end={d.ruta === '/'} className={activo(d.ruta, pathname) ? 'on' : ''}>
           <d.icono className="ic" />
@@ -60,9 +68,9 @@ function Rail() {
   );
 }
 
-function BarraLateral() {
+function BarraLateral({ alAbrirBuscador }: { alAbrirBuscador: () => void }) {
   const { pathname } = useLocation();
-  const { sesion } = useSesionActiva();
+  const { sesion, puede } = useSesionActiva();
   const vencidas = useVencidas();
   const [contraida, setContraida] = useState(false);
   const operacion = useVisibles(NAV_PC_OPERACION);
@@ -78,7 +86,7 @@ function BarraLateral() {
       <d.icono className="ic" />
       {!contraida && d.texto}
       {d.vencidas && vencidas > 0 && (
-        <span className="bdg b-err bdg-sm" style={{ marginLeft: 'auto' }}>
+        <span className="bdg b-err bdg-sm side-badge">
           {vencidas}
         </span>
       )}
@@ -86,18 +94,40 @@ function BarraLateral() {
   );
   return (
     <aside className={`side${contraida ? ' contraida' : ''}`} aria-label="Navegación">
-      <div className="fila-entre" style={{ padding: '4px 4px 16px 8px' }}>
-        {contraida ? <Logotipo tamano={32} /> : <Marca tamano={32} texto={19} />}
-        <button type="button" className="icon-btn" aria-label={contraida ? 'Expandir menú' : 'Contraer menú'} onClick={() => setContraida(!contraida)} style={{ color: 'var(--texto-2)' }}>
+      <div className="side-enc">
+        {contraida ? <Logotipo tamano={32} /> : <Marca tamano={30} texto={18} />}
+        <button
+          type="button"
+          className="icon-btn side-toggle"
+          aria-label={contraida ? 'Expandir menú' : 'Contraer menú'}
+          title={contraida ? 'Expandir menú' : 'Contraer menú'}
+          onClick={() => setContraida(!contraida)}
+        >
           {contraida ? <ChevronsRight className="ic" /> : <ChevronsLeft className="ic" />}
         </button>
       </div>
-      <nav className="pila" style={{ gap: 2 }}>
+      <nav className="pila side-nav" style={{ gap: 2 }}>
+        {puede('inventario.ver') && (
+          <button
+            type="button"
+            className="it side-buscar"
+            onClick={alAbrirBuscador}
+            title={contraida ? 'Buscar producto (Ctrl+K)' : undefined}
+          >
+            <Search className="ic" />
+            {!contraida && (
+              <>
+                <span>Buscar producto</span>
+                <kbd className="kbd-atajo">Ctrl K</kbd>
+              </>
+            )}
+          </button>
+        )}
         {operacion.map(enlace)}
         {admin.length > 0 && !contraida && <p className="grp">ADMINISTRACIÓN</p>}
         {admin.map(enlace)}
       </nav>
-      <div className="pie">
+      <div className="pie" title={contraida ? `${sesion.usuario.nombre} · ${sesion.usuario.rolNombre}` : undefined}>
         <span className="avatar" style={{ width: 36, height: 36 }}>
           {iniciales(sesion.usuario.nombre)}
         </span>
@@ -115,23 +145,41 @@ function BarraLateral() {
 export function AppShell() {
   const formato = useFormato();
   const { pathname } = useLocation();
-  const { soloLectura, venceEn } = useSesionActiva();
+  const { soloLectura, venceEn, puede } = useSesionActiva();
+  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
   const conNav = formato === 'telefono' && CON_NAV.includes(pathname);
+  const puedeBuscar = puede('inventario.ver');
+
+  useEffect(() => {
+    if (!puedeBuscar) return;
+    const alPresionar = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setBuscadorAbierto((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', alPresionar);
+    return () => window.removeEventListener('keydown', alPresionar);
+  }, [puedeBuscar]);
+
   return (
-    <div className="app">
-      {formato === 'tablet' && <Rail />}
-      {formato === 'pc' && <BarraLateral />}
-      <div className={`app-cuerpo${conNav ? ' con-nav' : ''}`}>
-        {MODO_DEMO && <p className="banner-modo">Modo demostración: servidor de prueba en este navegador, sin backend real.</p>}
-        {soloLectura && (
-          <p className="banner-solo-lectura" role="alert">
-            <Lock className="ic" style={{ width: 18, height: 18 }} />
-            Solo lectura desde las {venceEn ? formatoHora(venceEn) : ''}: pasaron más de 24 horas sin conexión. Conéctate para seguir registrando.
-          </p>
-        )}
-        <Outlet />
+    <BuscadorProductosContext.Provider value={() => setBuscadorAbierto(true)}>
+      <div className="app">
+        {formato === 'tablet' && <Rail alAbrirBuscador={() => setBuscadorAbierto(true)} />}
+        {formato === 'pc' && <BarraLateral alAbrirBuscador={() => setBuscadorAbierto(true)} />}
+        <div className={`app-cuerpo${conNav ? ' con-nav' : ''}`}>
+          {MODO_DEMO && <p className="banner-modo">Modo demostración: servidor de prueba en este navegador, sin backend real.</p>}
+          {soloLectura && (
+            <p className="banner-solo-lectura" role="alert">
+              <Lock className="ic" style={{ width: 18, height: 18 }} />
+              Solo lectura desde las {venceEn ? formatoHora(venceEn) : ''}: pasaron más de 24 horas sin conexión. Conéctate para seguir registrando.
+            </p>
+          )}
+          <Outlet />
+        </div>
+        {conNav && <NavInferior />}
       </div>
-      {conNav && <NavInferior />}
-    </div>
+      {buscadorAbierto && <BuscadorRapidoProductos alCerrar={() => setBuscadorAbierto(false)} />}
+    </BuscadorProductosContext.Provider>
   );
 }

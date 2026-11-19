@@ -1,13 +1,10 @@
 import { test, expect } from '@playwright/test';
+import { iniciarSesionDemo } from './ayuda';
 
 test.describe('E2E · Módulos y Flujos del Sistema', () => {
   test.beforeEach(async ({ page }) => {
     // Iniciar sesión con Dueño (HU-001)
-    await page.goto('/login');
-    await page.fill('#u', 'rodolfo');
-    await page.fill('#p', 'demo1234');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/');
+    await iniciarSesionDemo(page);
   });
 
   test('HU-042/HU-043: Consulta y búsqueda en listado de ventas', async ({ page }) => {
@@ -30,7 +27,17 @@ test.describe('E2E · Módulos y Flujos del Sistema', () => {
   test('HU-034 a HU-038: Consulta de listado de clientes y saldos', async ({ page }) => {
     await page.goto('/clientes');
     await expect(page.getByRole('heading', { name: 'Clientes', exact: true })).toBeVisible();
-    await expect(page.locator('main.pag-main')).toBeVisible();
+    await expect(page.getByText('Por cobrar', { exact: true })).toBeVisible();
+    await expect(page.getByText('Saldo vencido', { exact: true })).toBeVisible();
+
+    await page.getByRole('searchbox', { name: 'Buscar cliente' }).fill('Abarrotes Doña Lupe');
+    const cliente = page.getByRole('link', { name: /Abarrotes Doña Lupe/ });
+    await expect(cliente).toBeVisible();
+    await cliente.click();
+
+    await expect(page.getByRole('heading', { name: 'Abarrotes Doña Lupe', exact: true })).toBeVisible();
+    await expect(page.getByText('Total comprado', { exact: true })).toBeVisible();
+    await expect(page.getByText('Última compra', { exact: true })).toBeVisible();
   });
 
 
