@@ -1,7 +1,7 @@
 import Decimal from 'decimal.js';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, Minus, Plus, Trash2, Truck } from 'lucide-react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import type { FormaPago } from '@micentralmx/shared/entidades';
 import { useSesionActiva } from '../../auth/SesionContext';
 import { AvisoLinea, Esqueleto } from '../../componentes/Estados';
@@ -24,13 +24,15 @@ interface LineaTicket extends LineaCarga {
   clasificacionNombre: string;
   unidadPlural: string;
   kilogramosPorUnidad: string | null;
+  origenInventario: 'dia' | 'general';
   precio: string;
 }
 
 const dinero = (valor: Decimal.Value) => formatoMXN(D(valor).toString());
 
-export default function OperacionDiaria() {
+export default function OperacionDiaria({ soloVentas = false }: { soloVentas?: boolean }) {
   const navegar = useNavigate();
+  const [params] = useSearchParams();
   const avisar = useAvisos();
   const { puede, sesion } = useSesionActiva();
   const { enLinea } = useConectividad();
@@ -40,7 +42,7 @@ export default function OperacionDiaria() {
   const [fecha, setFecha] = useState(diaLocal());
   const resumen = useTotalesCargaDelDia(fecha);
   const cargasAbiertas = useCargasAbiertas() ?? [];
-  const [paso, setPaso] = useState<1 | 2>(1);
+  const [paso, setPaso] = useState<1 | 2>(soloVentas ? 2 : 1);
   const [proveedorId, setProveedorId] = useState('');
   const [renglones, setRenglones] = useState<LineaCarga[]>([{ clasificacionId: '', cantidad: '' }]);
   const [cargaNuevaId, setCargaNuevaId] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export default function OperacionDiaria() {
   const [venceEl, setVenceEl] = useState(sumarDias(diaLocal(), sesion.configuracion.plazoCreditoDias));
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const preseleccionAplicada = useRef(false);
 
   const clases = useMemo(() => (catalogo ?? []).flatMap((p) => p.clasificaciones.map((c) => ({
     id: c.clasificacion.id,
@@ -96,6 +99,40 @@ export default function OperacionDiaria() {
   const totalTicket = sumar(ticket.map((x) => D(x.cantidad).times(x.precio)));
   const puedeCambiarPrecio = puede('ventas.modificar_precio');
 
+  const tarjetasVenta = catalogo?.flatMap((producto) => producto.clasificaciones.map((clasificacion) => {
+    const dia = datosDia.find((x) => x.clasificacionId === clasificacion.clasificacion.id);
+    const usaCargaDeHoy = !!dia?.queda.gt(0);
+    const disponible = usaCargaDeHoy ? dia!.queda : clasificacion.existencia;
+    return {
+      clasificacionId: clasificacion.clasificacion.id,
+      clasificacionNombre: clasificacion.clasificacion.nombre,
+      productoNombre: producto.producto.nombre,
+      unidad: producto.unidad,
+      kilogramosPorUnidad: producto.producto.kilogramosPorUnidad ?? null,
+      precio: clasificacion.clasificacion.precio,
+      disponible,
+      cargadoHoy: dia?.cargado ?? D(0),
+      vendidoHoy: dia?.vendido ?? D(0),
+      origenInventario: (usaCargaDeHoy ? 'dia' : 'general') as 'dia' | 'general',
+    };
+  })).filter((item) => item.disponible.gt(0)) ?? [];
+
+  useEffect(() => {
+    if (preseleccionAplicada.current || !catalogo) return;
+    const clasificacionId = params.get('clasificacion');
+    if (!clasificacionId) {
+      preseleccionAplicada.current = true;
+      return;
+    }
+    const producto = catalogo.find((p) => p.clasificaciones.some((c) => c.clasificacion.id === clasificacionId));
+    const clasificacion = producto?.clasificaciones.find((c) => c.clasificacion.id === clasificacionId);
+    if (producto && clasificacion) {
+      setSeleccion(clasificacionId);
+      setPrecio(clasificacion.clasificacion.precio);
+    }
+    preseleccionAplicada.current = true;
+  }, [catalogo, params]);
+
   if (!catalogo || !proveedores || !clientes || !resumen) {
     return <main className="pag-main"><Esqueleto texto="Preparando operación diaria…" /></main>;
   }
@@ -122,8 +159,9 @@ export default function OperacionDiaria() {
 
   const agregarAlTicket = () => {
     const clase = clases.find((x) => x.id === seleccion);
-    const existenciaDia = datosDia.find((x) => x.clasificacionId === seleccion)?.queda ?? D(0);
-    if (!clase) return setError('Elige una clasificación disponible.');
+    const tarjeta = tarjetasVenta.find((x) => x.clasificacionId === seleccion);
+    const existenciaDia = tarjeta?.disponible ?? D(0);
+    if (!clase || !tarjeta) return setError('Elige una clasificación disponible.');
     if (!D(cantidad).gt(0)) return setError('La cantidad debe ser mayor que cero.');
     const existenteTicket = ticket.find((x) => x.clasificacionId === clase.id);
     const yaEnTicket = D(existenteTicket?.cantidad ?? 0);
@@ -139,6 +177,7 @@ export default function OperacionDiaria() {
         clasificacionNombre: clase.nombre,
         unidadPlural: clase.unidad.plural,
         kilogramosPorUnidad: clase.kilogramosPorUnidad,
+        origenInventario: tarjeta.origenInventario,
         precio: precio || clase.precio,
       }];
     });
@@ -156,8 +195,13 @@ export default function OperacionDiaria() {
     try {
       const items = [] as Array<{ clasificacionId: string; cantidad: string; precio: string; cargaId?: string | null; origenNombre?: string | null }>;
       for (const item of ticket) {
-        const asignaciones = await asignarCargaRenglon(item.clasificacionId, item.cantidad, cargaNuevaId, fecha);
-        if (!asignaciones.length || asignaciones.some((a) => !a.cargaId)) throw new Error(`La carga de hoy no tiene unidades abiertas suficientes de ${item.clasificacionNombre}.`);
+        const asignaciones = await asignarCargaRenglon(
+          item.clasificacionId,
+          item.cantidad,
+          cargaNuevaId,
+          item.origenInventario === 'dia' ? fecha : undefined,
+        );
+        if (!asignaciones.length || (item.origenInventario === 'dia' && asignaciones.some((a) => !a.cargaId))) throw new Error(`No hay inventario abierto suficiente de ${item.clasificacionNombre}.`);
         items.push(...asignaciones.map((a) => ({ clasificacionId: item.clasificacionId, cantidad: a.cantidad, precio: item.precio, cargaId: a.cargaId, origenNombre: a.origenNombre })));
       }
       await registrarVenta({
@@ -183,16 +227,18 @@ export default function OperacionDiaria() {
 
   return (
     <main className="pag-main operacion-diaria">
-      <header className="operacion-hero">
-        <span className="operacion-eyebrow">Control diario</span>
-        <h1>Carga y venta</h1>
-        <p>Registra lo que llegó y vende desde tu inventario disponible.</p>
-      </header>
+      {!soloVentas && <>
+        <header className="operacion-hero">
+          <span className="operacion-eyebrow">Control diario</span>
+          <h1>Carga y venta</h1>
+          <p>Registra lo que llegó y vende desde tu inventario disponible.</p>
+        </header>
 
-      <nav className="operacion-pasos" aria-label="Progreso de operación">
-        <button type="button" className={`operacion-paso ${paso === 1 ? 'activo' : 'hecho'}`} onClick={() => setPaso(1)}><span>{paso === 1 ? '1' : <Check size={18} />}</span>Carga del día</button>
-        <button type="button" className={`operacion-paso ${paso === 2 ? 'activo' : ''}`} disabled={!datosDia.length} onClick={() => setPaso(2)}><span>2</span>Ventas</button>
-      </nav>
+        <nav className="operacion-pasos" aria-label="Progreso de operación">
+          <button type="button" className={`operacion-paso ${paso === 1 ? 'activo' : 'hecho'}`} onClick={() => setPaso(1)}><span>{paso === 1 ? '1' : <Check size={18} />}</span>Carga del día</button>
+          <button type="button" className={`operacion-paso ${paso === 2 ? 'activo' : ''}`} disabled={!datosDia.length} onClick={() => setPaso(2)}><span>2</span>Ventas</button>
+        </nav>
+      </>}
 
       {paso === 1 ? (
         <section className="operacion-panel">
@@ -242,14 +288,14 @@ export default function OperacionDiaria() {
               {indicadoresKg.map(([titulo, kg]) => <div className="operacion-kilo" key={titulo}><span>{titulo}</span><strong>{kg === null ? 'Configurar equivalencia' : `${kg.toString()} kg`}</strong></div>)}
             </div>
             <div className="operacion-productos">
-              {datosDia.filter((x) => x.queda.gt(0)).map((x) => (
-                <button type="button" key={x.clasificacionId} className={`operacion-producto ${seleccion === x.clasificacionId ? 'seleccionado' : ''}`} onClick={() => { setSeleccion(x.clasificacionId); setCantidad('1'); setPrecio(x.unidad ? clases.find((c) => c.id === x.clasificacionId)?.precio ?? '' : ''); setError(null); }}>
-                  <span><strong>{x.clasificacionNombre}</strong><small>{x.productoNombre}{x.kilogramosPorUnidad ? ` · ${x.kilogramosPorUnidad} kg por unidad` : ''}</small></span>
-                  <span className="operacion-stock"><b>{x.queda.toString()}</b> {x.unidadPlural}{x.kilogramosPorUnidad && <small>{kilosDe(x.queda.toString(), x.kilogramosPorUnidad)} kg</small>}</span>
+              {tarjetasVenta.map((x) => (
+                <button type="button" key={x.clasificacionId} className={`operacion-producto ${seleccion === x.clasificacionId ? 'seleccionado' : ''}`} onClick={() => { setSeleccion(x.clasificacionId); setCantidad('1'); setPrecio(x.precio); setError(null); }}>
+                  <span><strong>{x.clasificacionNombre}</strong><small>{x.productoNombre}{x.kilogramosPorUnidad ? ` · ${x.kilogramosPorUnidad} kg por ${x.unidad.nombre}` : ''}{x.origenInventario === 'general' ? ' · inventario' : ''}</small></span>
+                  <span className="operacion-stock"><b>{x.disponible.toString()}</b> {x.unidad.plural}{x.kilogramosPorUnidad && <small>{kilosDe(x.disponible.toString(), x.kilogramosPorUnidad)} kg</small>}</span>
                   <span className="operacion-mas"><Plus size={22} /></span>
                 </button>
               ))}
-              {datosDia.every((x) => x.queda.lte(0)) && <p className="operacion-vacio">No hay existencias cargadas para esta fecha.</p>}
+              {tarjetasVenta.length === 0 && <p className="operacion-vacio">No hay productos con existencia disponible para vender.</p>}
             </div>
           </section>
 
@@ -257,10 +303,11 @@ export default function OperacionDiaria() {
             <section className="operacion-panel">
               <h2>Preparar venta</h2><p className="operacion-sub">Elige cantidad y ajusta el precio por unidad.</p>
               {!seleccion ? <p className="operacion-vacio">Selecciona una clasificación disponible.</p> : (() => {
-                const clase = clases.find((c) => c.id === seleccion)!;
-                const existencia = datosDia.find((x) => x.clasificacionId === seleccion)?.queda ?? D(0);
+                const clase = tarjetasVenta.find((c) => c.clasificacionId === seleccion)!;
+                const existencia = clase?.disponible ?? D(0);
+                if (!clase) return <p className="operacion-vacio">La clasificación ya no está disponible.</p>;
                 return <>
-                  <h3 className="operacion-titulo">{clase.nombre}</h3>
+                  <h3 className="operacion-titulo">{clase.clasificacionNombre}</h3>
                   <div className="operacion-control"><b>Cantidad de {clase.unidad.plural}</b><div className="operacion-cantidad"><button type="button" aria-label="Restar uno" onClick={() => setCantidad((v) => Decimal.max(0, D(v || 0).minus(1)).toString())}><Minus /></button><input type="number" min="0" step={clase.unidad.permiteDecimales ? '0.01' : '1'} value={cantidad} onChange={(e) => setCantidad(e.target.value)} /><button type="button" aria-label="Sumar uno" onClick={() => setCantidad((v) => D(v || 0).plus(1).toString())}><Plus /></button><small>{existencia.toString()} disponibles {clase.kilogramosPorUnidad ? `· ${kilosDe(existencia.toString(), clase.kilogramosPorUnidad)} kg` : ''}</small></div></div>
                   <label className="operacion-campo margen-arriba">Precio por {clase.unidad.nombre}{puedeCambiarPrecio ? '' : ' · catálogo'}
                     <input type="number" min="0" step="0.5" value={precio || clase.precio} readOnly={!puedeCambiarPrecio} onChange={(e) => setPrecio(e.target.value)} />
@@ -277,13 +324,15 @@ export default function OperacionDiaria() {
               {formaPago === 'credito' && <><label className="operacion-campo margen-arriba">Cliente<select value={clienteId} onChange={(e) => { const id = e.target.value; setClienteId(id); const cliente = clientes.find((c) => c.cliente.id === id); if (id) setVenceEl(sumarDias(diaLocal(), cliente?.cliente.plazoDias ?? sesion.configuracion.plazoCreditoDias)); }}><option value="">Selecciona cliente</option>{clientes.map((c) => <option key={c.cliente.id} value={c.cliente.id}>{c.cliente.nombre}</option>)}</select></label><label className="operacion-campo margen-arriba">Vence el<input type="date" value={venceEl} onChange={(e) => setVenceEl(e.target.value)} /></label></>}
               {error && <AvisoLinea tono="err">{error}</AvisoLinea>}
               <button type="button" className="operacion-boton principal ancho margen-arriba" disabled={guardando || !ticket.length} onClick={() => void confirmarVenta()}>{guardando ? 'Guardando…' : 'Registrar venta'} <Check size={18} /></button>
-              <button type="button" className="operacion-boton suave ancho margen-arriba" onClick={() => setPaso(1)}><ArrowLeft size={18} /> Ajustar carga del día</button>
+              {soloVentas
+                ? <button type="button" className="operacion-boton suave ancho margen-arriba" onClick={() => navegar('/inventario')}><ArrowLeft size={18} /> Volver al inventario</button>
+                : <button type="button" className="operacion-boton suave ancho margen-arriba" onClick={() => setPaso(1)}><ArrowLeft size={18} /> Ajustar carga del día</button>}
             </section>
           </div>
           {!cargasAbiertas.some((c) => c.carga.id === cargaNuevaId) && cargaNuevaId && <p className="operacion-nota">La carga se está sincronizando; las ventas quedarán ligadas al inventario disponible.</p>}
         </>
       )}
-      <div className="operacion-links"><button type="button" className="operacion-link" onClick={() => navegar('/carga')}><Truck size={16} /> Volver al historial de cargas</button><button type="button" className="operacion-link" onClick={() => navegar('/carga/registro')}>Captura avanzada de carga</button></div>
+      {!soloVentas && <div className="operacion-links"><button type="button" className="operacion-link" onClick={() => navegar('/carga')}><Truck size={16} /> Volver al historial de cargas</button><button type="button" className="operacion-link" onClick={() => navegar('/carga/registro')}>Captura avanzada de carga</button></div>}
     </main>
   );
 }
