@@ -1,0 +1,60 @@
+.compras-contenido { width: 100%; max-width: 1100px; }
+.compras-resumen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.compra-kpi { padding: 14px; min-width: 0; }
+.compra-kpi span { display: block; color: var(--texto-2); font-size: 13px; font-weight: 600; }
+.compra-kpi strong { display: block; margin-top: 3px; font-size: 21px; line-height: 27px; }
+.compra-kpi small { color: var(--texto-2); }
+.compra-kpi.alerta { background: var(--error-fondo); border-color: transparent; }
+.compra-kpi.alerta strong { color: var(--error-texto); }
+.compras-controles { display: grid; gap: 10px; }
+.compras-orden { display: flex; align-items: center; gap: 8px; }
+.compras-orden label { color: var(--texto-2); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.compras-orden .inp { min-height: 44px; }
+.compras-lista { display: grid; gap: 12px; }
+.compra-card { overflow: hidden; }
+.compra-card-cabecera { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.compra-card-superior { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.compra-card-proveedor { font-size: 17px; font-weight: 700; }
+.compra-card-total { font-size: 20px; font-weight: 750; white-space: nowrap; }
+.compra-card-productos { color: var(--texto-2); font-size: 14px; }
+.compra-card-productos strong { color: var(--texto); }
+.compra-card-insignias { display: flex; flex-wrap: wrap; gap: 6px; }
+.compra-card-acciones { padding: 10px 14px 14px; border-top: 1px solid var(--borde); }
+.compra-card-acciones .btn { width: 100%; }
+.compra-renglon { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--gris-1); }
+.compra-renglon:last-child { border-bottom: 0; }
+.compra-renglon p { font-weight: 600; }
+.compra-renglon small { color: var(--texto-2); }
+.compra-renglon strong { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.compra-modal-lectura { display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px; border-radius: var(--radio-s); background: var(--info-fondo); color: var(--info-texto); font-size: 13px; line-height: 18px; }
+.compra-modal-lectura .ic { flex: none; margin-top: 1px; }
+.compra-modal-datos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border: 1px solid var(--borde); border-radius: var(--radio-m); overflow: hidden; }
+.compra-modal-datos div { min-width: 0; padding: 11px 12px; border-bottom: 1px solid var(--borde); }
+.compra-modal-datos div:nth-child(odd) { border-right: 1px solid var(--borde); }
+.compra-modal-datos div:nth-last-child(-n + 2) { border-bottom: 0; }
+.compra-modal-datos dt { color: var(--texto-2); font-size: 12px; line-height: 16px; }
+.compra-modal-datos dd { margin: 3px 0 0; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.compra-modal-mercancia { display: flex; flex-direction: column; gap: 8px; }
+.compra-modal-renglones { padding: 0 12px; border: 1px solid var(--borde); border-radius: var(--radio-m); }
+.compra-modal-total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px; border-radius: var(--radio-s); background: var(--fondo-tabla); font-weight: 650; }
+.compra-modal-total strong { font-size: 20px; }
+
+@media (max-width: 480px) {
+  .compra-modal-datos { grid-template-columns: 1fr; }
+  .compra-modal-datos div:nth-child(odd) { border-right: 0; }
+  .compra-modal-datos div:nth-last-child(-n + 2) { border-bottom: 1px solid var(--borde); }
+  .compra-modal-datos div:last-child { border-bottom: 0; }
+}
+
+@media (min-width: 768px) {
+  .compras-resumen { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .compras-controles { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .compras-orden { min-width: 250px; }
+  .compras-lista { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.compra-form-estado { padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+.compra-form-estado span { display: inline-flex; align-items: center; gap: 5px; }
+.compra-form-paso { padding: 16px; gap: 18px !important; }
+.compra-form-subtotal { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: var(--radio-s); background: var(--fondo-tabla); }
+.compra-form-subtotal strong { font-size: 17px; }

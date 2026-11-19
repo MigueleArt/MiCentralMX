@@ -1,13 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { iniciarSesionDemo } from './ayuda';
 
 test.describe('E2E · Mejoras v2.0 (Buscador rápido, Reportes y Abonos)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.fill('#u', 'rodolfo');
-    await page.fill('#p', 'demo1234');
-    await page.click('button[type="submit"]');
-    await expect(page).toHaveURL('/');
-    await expect(page.locator('text=$16,394')).toBeVisible({ timeout: 15000 });
+    await iniciarSesionDemo(page);
   });
 
   test('buscador rápido desde Inicio y en Nueva venta agiliza el registro', async ({ page }) => {

@@ -21,4 +21,5 @@ export async function iniciarSesionDemo(page: Page) {
   await page.click('button[type="submit"]');
   await expect(page).toHaveURL('/');
   await completarOnboarding(page);
+  await expect(page.getByText('Jitomate Saladette', { exact: false }).first()).toBeVisible({ timeout: 15000 });
 }
