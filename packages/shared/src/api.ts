@@ -169,10 +169,60 @@ export interface RespuestaPull {
 
 // ── Pantallas solo en línea (TanStack Query) ────────────────────────────────
 
+export type GranularidadReporte = 'dia' | 'semana' | 'mes';
+
+export interface PuntoSerieReporte {
+  clave: string;
+  etiqueta: string;
+  desde: string;
+  hasta: string;
+  ventasTotal: string;
+  ventasContado: string;
+  ventasCredito: string;
+  ingresosTotal: string;
+  abonos: string;
+  egresos: string;
+  cantidadVentas: number;
+}
+
+export interface ProductoVendidoReporte {
+  productoId: string;
+  nombre: string;
+  clasificacion: string;
+  unidad: string;
+  cantidad: string;
+  importe: string;
+}
+
 export interface ResumenReportes {
   desde: string;
   hasta: string;
+  granularidad: GranularidadReporte;
   ventas: { total: string; cantidad: number; aCredito: number };
+  ventasDetalle: {
+    contadoEfectivo: string;
+    contadoTransferencia: string;
+    transferenciaPorConfirmar: string;
+    credito: string;
+    ticketPromedio: string;
+  };
+  ingresosDetalle: {
+    ventasContado: string;
+    abonosDeudas: string;
+    otrosIngresos: string;
+    totalIngresos: string;
+    egresos: string;
+    balanceNeto: string;
+  };
+  comparativa: {
+    desde: string;
+    hasta: string;
+    ventasTotal: string;
+    ingresosTotal: string;
+    cantidadVentas: number;
+  };
+  serie: PuntoSerieReporte[];
+  topProductos: ProductoVendidoReporte[];
   compras: { total: string; cantidad: number; proveedores: number };
   inventario: { productos: number; bajos: number };
   pagos: { ingresos: string; egresos: string };

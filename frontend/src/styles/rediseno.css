@@ -100,6 +100,34 @@ a.card:focus-visible, .seg button:focus-visible, .qty button:focus-visible {
   .btn, .inp, a.card, .tile, .rail a, .side a.it { transition: none; }
 }
 @media print {
+  @page {
+    margin: 12mm 12mm 16mm 12mm;
+    @top-left { content: ""; }
+    @top-center { content: ""; }
+    @top-right { content: ""; }
+    @bottom-left {
+      content: "MiCentralMX";
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 8.5pt;
+      color: #5b6e68;
+    }
+    @bottom-center { content: ""; }
+    @bottom-right {
+      content: "Página " counter(page) " de " counter(pages);
+      font-family: Inter, system-ui, sans-serif;
+      font-size: 8.5pt;
+      color: #5b6e68;
+    }
+  }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .side, .rail, .nav, .banner-modo, .banner-solo-lectura, .sync, .fab, .barra-accion, .toasts, .no-print { display: none !important; }
+  body, .app, .app-cuerpo, .pag-main {
+    background: #fff !important;
+    display: block !important;
+    min-height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
   .card, .btn, .tile, .sheet, .dialog, .nav, .barra-accion { box-shadow: none; }
 }
 

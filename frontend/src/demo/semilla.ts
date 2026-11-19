@@ -55,6 +55,16 @@ export interface AuditoriaServidor {
 }
 
 const hace = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+/** Mantiene los movimientos "de hoy" dentro del día calendario actual incluso entre 00:00 y 06:30. */
+const haceHoy = (min: number) => {
+  const ahora = Date.now();
+  const inicioHoy = new Date(`${diaLocal()}T00:00:01-06:00`).getTime();
+  const objetivo = ahora - min * 60_000;
+  if (objetivo >= inicioHoy) return new Date(objetivo).toISOString();
+  const transcurrido = Math.max(0, ahora - inicioHoy);
+  const fraccion = Math.max(0, 1 - min / 660);
+  return new Date(inicioHoy + Math.round(transcurrido * fraccion)).toISOString();
+};
 const haceDias = (dias: number, hora = 10) => {
   const f = new Date(`${sumarDias(diaLocal(), -dias)}T${String(hora).padStart(2, '0')}:00:00-06:00`);
   return f.toISOString();
@@ -229,25 +239,25 @@ export function crearSemilla() {
   venta(117, haceDias(2, 8), [renglon('Aguacate Hass', 'Segunda / Mediano', 5), renglon('Jitomate Saladette', 'Tercera / Chico', 4)], {
     cliente: cli('Mercado'), forma: 'credito', vence: sumarDias(hoy, 19),
   });
-  const v120 = venta(120, hace(390), [renglon('Jitomate Saladette', 'Segunda / Mediano', 2, carga2Id, 'Don Ale')], { usuario: ana });
-  venta(121, hace(330), [renglon('Chile serrano', 'Única', 25), renglon('Limón persa', 'Segunda / Mediano', 2)], {
+  const v120 = venta(120, haceHoy(390), [renglon('Jitomate Saladette', 'Segunda / Mediano', 2, carga2Id, 'Don Ale')], { usuario: ana });
+  venta(121, haceHoy(330), [renglon('Chile serrano', 'Única', 25), renglon('Limón persa', 'Segunda / Mediano', 2)], {
     cliente: cli('Cocina'), forma: 'credito', vence: sumarDias(hoy, 7),
   });
-  venta(122, hace(270), [renglon('Limón persa', 'Primera / Grande', 4), renglon('Jitomate Saladette', 'Primera / Grande', 2)], {
+  venta(122, haceHoy(270), [renglon('Limón persa', 'Primera / Grande', 4), renglon('Jitomate Saladette', 'Primera / Grande', 2)], {
     cliente: cli('Frutería'), forma: 'transferencia',
   });
-  venta(123, hace(225), [renglon('Aguacate Hass', 'Primera / Grande', 3), renglon('Jitomate Saladette', 'Tercera / Chico', 2)], {
+  venta(123, haceHoy(225), [renglon('Aguacate Hass', 'Primera / Grande', 3), renglon('Jitomate Saladette', 'Tercera / Chico', 2)], {
     cliente: cli('Juan'), forma: 'efectivo',
   });
-  venta(124, hace(200), [renglon('Jitomate Saladette', 'Primera / Grande', 1)], { estado: 'cancelada' });
-  venta(125, hace(178), [renglon('Chile serrano', 'Única', 26)], { cliente: cli('Fonda'), forma: 'transferencia', estado: 'por_confirmar' });
-  venta(126, hace(160), [renglon('Jitomate Saladette', 'Segunda / Mediano', 5), renglon('Chile serrano', 'Única', 20)], {
+  venta(124, haceHoy(200), [renglon('Jitomate Saladette', 'Primera / Grande', 1)], { estado: 'cancelada' });
+  venta(125, haceHoy(178), [renglon('Chile serrano', 'Única', 26)], { cliente: cli('Fonda'), forma: 'transferencia', estado: 'por_confirmar' });
+  venta(126, haceHoy(160), [renglon('Jitomate Saladette', 'Segunda / Mediano', 5), renglon('Chile serrano', 'Única', 20)], {
     cliente: cli('Juan'), forma: 'transferencia',
   });
-  const v127 = venta(127, hace(132), [renglon('Aguacate Hass', 'Primera / Grande', 4), renglon('Limón persa', 'Segunda / Mediano', 2)], {
+  const v127 = venta(127, haceHoy(132), [renglon('Aguacate Hass', 'Primera / Grande', 4), renglon('Limón persa', 'Segunda / Mediano', 2)], {
     cliente: cli('Abarrotes'), forma: 'credito', vence: sumarDias(hoy, 5), pagado: '1000',
   });
-  venta(128, hace(115), [renglon('Jitomate Saladette', 'Tercera / Chico', 2), renglon('Chile serrano', 'Única', 17)], {});
+  venta(128, haceHoy(115), [renglon('Jitomate Saladette', 'Tercera / Chico', 2), renglon('Chile serrano', 'Única', 17)], {});
 
   // Montos de importe pueden no ser redondos por los kilos; se redondean a 2 decimales.
   ventas.forEach((v) => (v.total = aImporte(v.total)));
@@ -261,7 +271,7 @@ export function crearSemilla() {
     {
       id: nuevoId(), clienteId: v127.clienteId!, clienteNombre: v127.clienteNombre!, monto: '1000.00', metodo: 'efectivo', nota: 'Anticipo',
       aplicaciones: [{ ventaId: v127.id, monto: '1000.00' }], excedente: '0.00', usuarioId: carlos.id, usuarioNombre: carlos.nombre,
-      creadoEnDispositivo: hace(120), requiereRevision: false,
+      creadoEnDispositivo: haceHoy(120), requiereRevision: false,
     },
   ];
 
@@ -272,7 +282,7 @@ export function crearSemilla() {
       id: nuevoId(), folio, folioProvisional: null, proveedorId: proveedor.id, proveedorNombre: proveedor.nombre,
       renglones: [{ ...r, costo, importe: aImporte(D(costo).times(cantidad)) }],
       total: aImporte(D(costo).times(cantidad)), formaPago: 'contado', venceEl: null,
-      usuarioId: rodolfo.id, usuarioNombre: rodolfo.nombre, creadoEnDispositivo: hace(minutos),
+      usuarioId: rodolfo.id, usuarioNombre: rodolfo.nombre, creadoEnDispositivo: haceHoy(minutos),
     };
   };
   const compras: Compra[] = [
@@ -294,7 +304,7 @@ export function crearSemilla() {
       usuarioId: rodolfo.id,
       usuarioNombre: rodolfo.nombre,
       dispositivoId: 'servidor',
-      creadoEnDispositivo: hace(480),
+      creadoEnDispositivo: haceHoy(480),
       cerradaEn: null,
       comisionTipo: null,
       comisionValor: null,
@@ -312,7 +322,7 @@ export function crearSemilla() {
       usuarioId: rodolfo.id,
       usuarioNombre: rodolfo.nombre,
       dispositivoId: 'servidor',
-      creadoEnDispositivo: hace(360),
+      creadoEnDispositivo: haceHoy(360),
       cerradaEn: null,
       comisionTipo: 'porcentaje',
       comisionValor: '10.00',
@@ -395,11 +405,11 @@ export function crearSemilla() {
   }
 
   const movimientosDinero: MovimientoDinero[] = [
-    { id: nuevoId(), tipo: 'egreso', categoria: 'pago_proveedor', concepto: 'Pago a proveedor · Agrícola San Juan', monto: '4000.00', metodo: 'transferencia', proveedorId: prov('Agrícola').id, usuarioNombre: rodolfo.nombre, creadoEn: hace(560) },
-    { id: nuevoId(), tipo: 'egreso', categoria: 'flete', concepto: 'Flete de mercancía', monto: '800.00', metodo: 'efectivo', proveedorId: null, usuarioNombre: rodolfo.nombre, creadoEn: hace(600) },
+    { id: nuevoId(), tipo: 'egreso', categoria: 'pago_proveedor', concepto: 'Pago a proveedor · Agrícola San Juan', monto: '4000.00', metodo: 'transferencia', proveedorId: prov('Agrícola').id, usuarioNombre: rodolfo.nombre, creadoEn: haceHoy(560) },
+    { id: nuevoId(), tipo: 'egreso', categoria: 'flete', concepto: 'Flete de mercancía', monto: '800.00', metodo: 'efectivo', proveedorId: null, usuarioNombre: rodolfo.nombre, creadoEn: haceHoy(600) },
     { id: nuevoId(), tipo: 'ingreso', categoria: 'renta', concepto: 'Renta de diablitos', monto: '300.00', metodo: 'efectivo', proveedorId: null, usuarioNombre: ana.nombre, creadoEn: haceDias(1, 13) },
-    { id: nuevoId(), tipo: 'egreso', categoria: 'pago_proveedor', concepto: 'Pago a proveedor · Don Ale', monto: '300.00', metodo: 'transferencia', proveedorId: donAle.id, usuarioNombre: rodolfo.nombre, creadoEn: hace(180) },
-    { id: nuevoId(), tipo: 'egreso', categoria: 'anticipo_productor', concepto: 'Anticipo a productor · Don Ale', monto: '100.00', metodo: 'efectivo', proveedorId: donAle.id, usuarioNombre: rodolfo.nombre, creadoEn: hace(300) },
+    { id: nuevoId(), tipo: 'egreso', categoria: 'pago_proveedor', concepto: 'Pago a proveedor · Don Ale', monto: '300.00', metodo: 'transferencia', proveedorId: donAle.id, usuarioNombre: rodolfo.nombre, creadoEn: haceHoy(180) },
+    { id: nuevoId(), tipo: 'egreso', categoria: 'anticipo_productor', concepto: 'Anticipo a productor · Don Ale', monto: '100.00', metodo: 'efectivo', proveedorId: donAle.id, usuarioNombre: rodolfo.nombre, creadoEn: haceHoy(300) },
   ];
 
   const liquidacion1Id = nuevoId();
@@ -421,7 +431,7 @@ export function crearSemilla() {
       neto: '562.00',
       usuarioId: rodolfo.id,
       usuarioNombre: rodolfo.nombre,
-      creadoEn: hace(240),
+      creadoEn: haceHoy(240),
     },
   ];
 
@@ -449,12 +459,12 @@ export function crearSemilla() {
   const ajustesProductor: AjusteProductor[] = [];
 
   const auditoria: AuditoriaServidor[] = [
-    { id: nuevoId(), fecha: hace(120), usuarioNombre: carlos.nombre, categoria: 'pagos', descripcion: `${carlos.nombre} registró un pago de $1,000 de Abarrotes Doña Lupe` },
-    { id: nuevoId(), fecha: hace(115), usuarioNombre: carlos.nombre, categoria: 'ventas', descripcion: `${carlos.nombre} registró la venta #000128` },
-    { id: nuevoId(), fecha: hace(200), usuarioNombre: ana.nombre, categoria: 'ventas', descripcion: `${ana.nombre} canceló la venta #000124` },
-    { id: nuevoId(), fecha: hace(240), usuarioNombre: rodolfo.nombre, categoria: 'liquidaciones', descripcion: `${rodolfo.nombre} emitió el corte #L-0001 para Don Ale por neto de $562.00` },
-    { id: nuevoId(), fecha: hace(420), usuarioNombre: ana.nombre, categoria: 'catalogo', descripcion: `${ana.nombre} cambió el precio de Jitomate Saladette Primera / Grande de $400 a $420` },
-    { id: nuevoId(), fecha: hace(570), usuarioNombre: rodolfo.nombre, categoria: 'compras', descripcion: `${rodolfo.nombre} registró la compra #C-0045 de Agrícola San Juan` },
+    { id: nuevoId(), fecha: haceHoy(120), usuarioNombre: carlos.nombre, categoria: 'pagos', descripcion: `${carlos.nombre} registró un pago de $1,000 de Abarrotes Doña Lupe` },
+    { id: nuevoId(), fecha: haceHoy(115), usuarioNombre: carlos.nombre, categoria: 'ventas', descripcion: `${carlos.nombre} registró la venta #000128` },
+    { id: nuevoId(), fecha: haceHoy(200), usuarioNombre: ana.nombre, categoria: 'ventas', descripcion: `${ana.nombre} canceló la venta #000124` },
+    { id: nuevoId(), fecha: haceHoy(240), usuarioNombre: rodolfo.nombre, categoria: 'liquidaciones', descripcion: `${rodolfo.nombre} emitió el corte #L-0001 para Don Ale por neto de $562.00` },
+    { id: nuevoId(), fecha: haceHoy(420), usuarioNombre: ana.nombre, categoria: 'catalogo', descripcion: `${ana.nombre} cambió el precio de Jitomate Saladette Primera / Grande de $400 a $420` },
+    { id: nuevoId(), fecha: haceHoy(570), usuarioNombre: rodolfo.nombre, categoria: 'compras', descripcion: `${rodolfo.nombre} registró la compra #C-0045 de Agrícola San Juan` },
   ];
 
   return {
